@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Novolis.IO.Watching</PackageId>
+    <Description>Single-file FileSystemWatcher helpers with optional debounce.</Description>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>Novolis.IO.Watching</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Novolis.IO.Unit</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="JetBrains.Annotations" />
+    <PackageReference Include="TUnit" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Novolis.IO.Git/Novolis.IO.Git.csproj" />
+    <ProjectReference Include="../../src/Novolis.IO.Watching/Novolis.IO.Watching.csproj" />
+    <ProjectReference Include="../../src/Novolis.IO.Recovery/Novolis.IO.Recovery.csproj" />
+    <ProjectReference Include="../../src/Novolis.IO.Processes/Novolis.IO.Processes.csproj" />
+    <ProjectReference Include="../../src/Novolis.IO.Paths/Novolis.IO.Paths.csproj" />
+  </ItemGroup>
+</Project>

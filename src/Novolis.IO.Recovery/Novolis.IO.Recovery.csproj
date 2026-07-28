@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Novolis.IO.Recovery</PackageId>
+    <Description>Content-hash draft recovery snapshots under a configurable root.</Description>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>Novolis.IO.Recovery</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>

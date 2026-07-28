@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Novolis.IO.Paths</PackageId>
+    <Description>Workspace root discovery helpers with caller-supplied markers.</Description>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>Novolis.IO.Paths</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>

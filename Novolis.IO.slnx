@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Novolis.IO.Workspace/Novolis.IO.Workspace.csproj" />
+    <Project Path="src/Novolis.IO.Workspace.Testing/Novolis.IO.Workspace.Testing.csproj" />
+    <Project Path="src/Novolis.IO.Git/Novolis.IO.Git.csproj" />
+    <Project Path="src/Novolis.IO.Watching/Novolis.IO.Watching.csproj" />
+    <Project Path="src/Novolis.IO.Recovery/Novolis.IO.Recovery.csproj" />
+    <Project Path="src/Novolis.IO.Processes/Novolis.IO.Processes.csproj" />
+    <Project Path="src/Novolis.IO.Paths/Novolis.IO.Paths.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Novolis.IO.Unit/Novolis.IO.Unit.csproj" />
+  </Folder>
+</Solution>

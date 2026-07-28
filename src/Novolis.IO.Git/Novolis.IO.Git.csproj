@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Novolis.IO.Git</PackageId>
+    <Description>Process-based Git status, checkpoint, pass, and revision helpers.</Description>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>Novolis.IO.Git</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Novolis.IO.Workspace.Testing</PackageId>
+    <Description>In-memory IFileWorkspace for unit tests.</Description>
+    <!-- Published from novolis-storage; keep sources here only if migrating. -->
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Novolis.IO.Workspace.Testing</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Novolis.IO.Workspace/Novolis.IO.Workspace.csproj" />
+  </ItemGroup>
+</Project>
