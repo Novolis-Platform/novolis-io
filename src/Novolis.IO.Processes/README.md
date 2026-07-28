@@ -14,5 +14,5 @@ dotnet add package Novolis.IO.Processes
 using Novolis.IO.Processes;
 
 var queue = new ProcessJobQueue();
-queue.Enqueue(new ProcessJobSpec("git", ["status"], workingDirectory: repoRoot));
+queue.Enqueue(new ProcessJobSpec { FileName = "git", Arguments = ["status"], WorkingDirectory = repoRoot });
 ```
