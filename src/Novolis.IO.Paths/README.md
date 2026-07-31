@@ -1,6 +1,6 @@
 # Novolis.IO.Paths
 
-Workspace root discovery helpers with caller-supplied markers.
+Walk parent directories to find a **workspace root** using caller-supplied markers (files/dirs) or a custom predicate. Used by dogfood apps and Studio hosts to locate repo roots without hard-coded paths.
 
 ## Install
 
@@ -13,8 +13,36 @@ dotnet add package Novolis.IO.Paths
 ```csharp
 using Novolis.IO.Paths;
 
-if (RootFinder.TryFind(Environment.CurrentDirectory, [".git", "global.json"], out var root))
+// All listed relative paths must exist under the root (file or directory).
+if (RootFinder.TryFind(
+        Environment.CurrentDirectory,
+        ["nuget.config", "Directory.Packages.props"],
+        out var root))
 {
     Console.WriteLine(root);
 }
+
+// Or supply a custom predicate:
+RootFinder.TryFind(startDir, dir => File.Exists(Path.Combine(dir.FullName, ".git", "HEAD")), out root);
 ```
+
+## API
+
+| Member | Role |
+|--------|------|
+| `RootFinder.TryFind(start, requiredRelativePaths, out root)` | Nearest ancestor where every marker exists |
+| `RootFinder.TryFind(start, isRoot, out root)` | Nearest ancestor matching `Func<DirectoryInfo, bool>` |
+
+On failure, `root` is set to `startDir` and the method returns `false`.
+
+## Dogfooding
+
+```powershell
+dotnet run --project ../novolis-dogfooding/apps/io/IoSmoke
+```
+
+## Related
+
+| Package | Role |
+|---------|------|
+| `Novolis.IO.Workspace` | Root-scoped file IO (published from novolis-storage) |

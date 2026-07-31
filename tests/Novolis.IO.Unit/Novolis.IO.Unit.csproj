@@ -8,9 +8,11 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Novolis.IO.Git/Novolis.IO.Git.csproj" />
+    <ProjectReference Include="../../src/Novolis.IO.GitHub/Novolis.IO.GitHub.csproj" />
     <ProjectReference Include="../../src/Novolis.IO.Watching/Novolis.IO.Watching.csproj" />
     <ProjectReference Include="../../src/Novolis.IO.Recovery/Novolis.IO.Recovery.csproj" />
     <ProjectReference Include="../../src/Novolis.IO.Processes/Novolis.IO.Processes.csproj" />
     <ProjectReference Include="../../src/Novolis.IO.Paths/Novolis.IO.Paths.csproj" />
+    <ProjectReference Include="../../src/Novolis.IO.Mobile.Android/Novolis.IO.Mobile.Android.csproj" />
   </ItemGroup>
 </Project>

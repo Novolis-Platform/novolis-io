@@ -17,6 +17,11 @@ public sealed class DeviceCodeResponse
     /// <summary>Verification URL to open (GitHub app / browser / passkey).</summary>
     public required Uri VerificationUri { get; init; }
 
+    /// <summary>
+    /// Prefer this URL when opening a browser — includes the user code so GitHub can skip manual entry.
+    /// </summary>
+    public Uri VerificationUriComplete { get; init; } = null!;
+
     /// <summary>Recommended polling interval.</summary>
     public required TimeSpan Interval { get; init; }
 
@@ -77,19 +82,23 @@ public sealed class GitHubDeviceAuth
     }
 
     /// <summary>Requests a device/user code pair for <paramref name="clientId"/>.</summary>
+    /// <remarks>
+    /// OAuth Apps use <paramref name="scope"/> (e.g. <c>repo</c>).
+    /// GitHub App client ids (<c>Iv1.</c>…) must not send scopes.
+    /// </remarks>
     public async Task<DeviceCodeResponse> RequestDeviceCodeAsync(
         string clientId,
-        string scope = "repo",
+        string? scope = "repo",
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(clientId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(scope);
 
-        using var content = new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["client_id"] = clientId,
-            ["scope"] = scope,
-        });
+        var fields = new Dictionary<string, string> { ["client_id"] = clientId };
+        var isGitHubApp = clientId.StartsWith("Iv", StringComparison.OrdinalIgnoreCase);
+        if (!isGitHubApp && !string.IsNullOrWhiteSpace(scope))
+            fields["scope"] = scope;
+
+        using var content = new FormUrlEncodedContent(fields);
         using var response = await _http.PostAsync(DeviceCodeEndpoint, content, cancellationToken).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
@@ -101,11 +110,28 @@ public sealed class GitHubDeviceAuth
             || string.IsNullOrWhiteSpace(dto.VerificationUri))
             throw new InvalidOperationException($"Incomplete device code response: {body}");
 
+        var verify = new Uri(dto.VerificationUri);
+        Uri complete;
+        if (!string.IsNullOrWhiteSpace(dto.VerificationUriComplete)
+            && Uri.TryCreate(dto.VerificationUriComplete, UriKind.Absolute, out var parsedComplete))
+        {
+            complete = parsedComplete;
+        }
+        else
+        {
+            var builder = new UriBuilder(verify)
+            {
+                Query = "user_code=" + Uri.EscapeDataString(dto.UserCode),
+            };
+            complete = builder.Uri;
+        }
+
         return new DeviceCodeResponse
         {
             DeviceCode = dto.DeviceCode,
             UserCode = dto.UserCode,
-            VerificationUri = new Uri(dto.VerificationUri),
+            VerificationUri = verify,
+            VerificationUriComplete = complete,
             Interval = TimeSpan.FromSeconds(Math.Max(1, dto.Interval)),
             ExpiresInSeconds = dto.ExpiresIn,
         };
@@ -178,6 +204,9 @@ public sealed class GitHubDeviceAuth
 
         [JsonPropertyName("verification_uri")]
         public string? VerificationUri { get; set; }
+
+        [JsonPropertyName("verification_uri_complete")]
+        public string? VerificationUriComplete { get; set; }
 
         [JsonPropertyName("interval")]
         public int Interval { get; set; }

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Novolis.IO.Mobile.Android</PackageId>
+    <Description>Host-side Android Debug Bridge (ADB protocol via AdvancedSharpAdbClient): devices, technical stats, shell, sync, APK validate/install/verify. Requires platform-tools adb only to host the local server.</Description>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>Novolis.IO.Mobile.Android</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="AdvancedSharpAdbClient" />
+  </ItemGroup>
+</Project>
