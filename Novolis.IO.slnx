@@ -7,6 +7,7 @@
     <Project Path="src/Novolis.IO.Recovery/Novolis.IO.Recovery.csproj" />
     <Project Path="src/Novolis.IO.Processes/Novolis.IO.Processes.csproj" />
     <Project Path="src/Novolis.IO.Paths/Novolis.IO.Paths.csproj" />
+    <Project Path="src/Novolis.IO.GitHub/Novolis.IO.GitHub.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Novolis.IO.Unit/Novolis.IO.Unit.csproj" />

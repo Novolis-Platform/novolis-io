@@ -10,6 +10,7 @@
 | `Novolis.IO.Recovery` | `dotnet add package Novolis.IO.Recovery` |
 | `Novolis.IO.Processes` | `dotnet add package Novolis.IO.Processes` |
 | `Novolis.IO.Paths` | `dotnet add package Novolis.IO.Paths` |
+| `Novolis.IO.GitHub` | `dotnet add package Novolis.IO.GitHub` |
 
 `Novolis.IO.Workspace` / `.Testing` are published from **novolis-storage**.
 

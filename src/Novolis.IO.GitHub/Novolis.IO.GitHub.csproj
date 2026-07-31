@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Novolis.IO.GitHub</PackageId>
+    <Description>GitHub OAuth device flow and sparse content/ repository mirror (Pull + Save/Commit/Push) via Octokit.</Description>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>Novolis.IO.GitHub</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Octokit" />
+  </ItemGroup>
+</Project>
