@@ -6,6 +6,8 @@ Device work uses the **ADB wire protocol** via [AdvancedSharpAdbClient](https://
 
 This is **not** an on-device `net10.0-android` / MAUI package.
 
+**Coverage:** this assembly is excluded from org line-coverage via `[assembly: ExcludeFromCodeCoverage]` (see `novolis-governance/docs/coverage-report.md`). Unit tests in `Novolis.IO.Unit` still exercise parsing/helpers; live ADB/device paths are validated in dogfood (`AdbLab`).
+
 ## Install
 
 ```bash

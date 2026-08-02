@@ -86,6 +86,44 @@ public sealed class GitHubTests
         }
     }
 
+    [Test]
+    public async Task DeviceAuth_WaitForAccessToken_returns_token()
+    {
+        var handler = new QueueHandler(
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"error":"authorization_pending"}""",
+                    Encoding.UTF8,
+                    "application/json"),
+            },
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"access_token":"gho_wait","token_type":"bearer"}""",
+                    Encoding.UTF8,
+                    "application/json"),
+            });
+        var auth = new GitHubDeviceAuth(new HttpClient(handler));
+        var device = new DeviceCodeResponse
+        {
+            DeviceCode = "dev",
+            UserCode = "ABCD",
+            VerificationUri = new Uri("https://github.com/login/device"),
+            Interval = TimeSpan.FromMilliseconds(1),
+            ExpiresInSeconds = 30,
+        };
+        var token = await auth.WaitForAccessTokenAsync("client", device);
+        await Assert.That(token).IsEqualTo("gho_wait");
+    }
+
+    [Test]
+    public async Task DeviceAuth_result_slow_down_is_pending()
+    {
+        var result = new DeviceTokenResult(false, null, "slow_down", "slow");
+        await Assert.That(result.IsPending).IsTrue();
+    }
+
     sealed class QueueHandler : HttpMessageHandler
     {
         readonly Queue<HttpResponseMessage> _responses;
