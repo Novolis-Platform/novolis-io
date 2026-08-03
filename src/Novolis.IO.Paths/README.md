@@ -1,3 +1,11 @@
+<!-- novolis-pkg-brand:start -->
+<p align="center">
+  <a href="https://github.com/Novolis-Platform/novolis-io">
+    <img src="https://raw.githubusercontent.com/Novolis-Platform/.github/main/brand/logo-icon.svg" width="72" alt="Novolis"/>
+  </a>
+</p>
+<!-- novolis-pkg-brand:end -->
+
 # Novolis.IO.Paths
 
 Walk parent directories to find a **workspace root** using caller-supplied markers (files/dirs) or a custom predicate. Used by dogfood apps and Studio hosts to locate repo roots without hard-coded paths.
@@ -46,3 +54,4 @@ dotnet run --project ../novolis-dogfooding/apps/io/IoSmoke
 | Package | Role |
 |---------|------|
 | `Novolis.IO.Workspace` | Root-scoped file IO (published from novolis-storage) |
+

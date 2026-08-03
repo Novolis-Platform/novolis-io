@@ -1,3 +1,11 @@
+<!-- novolis-pkg-brand:start -->
+<p align="center">
+  <a href="https://github.com/Novolis-Platform/novolis-io">
+    <img src="https://raw.githubusercontent.com/Novolis-Platform/.github/main/brand/logo-icon.svg" width="72" alt="Novolis"/>
+  </a>
+</p>
+<!-- novolis-pkg-brand:end -->
+
 # Novolis.IO.Watching
 
 Single-file `FileSystemWatcher` helpers for editor-style reload loops: immediate (`SingleFileWatcher`) or **debounced** (`DebouncedFileWatcher`).
@@ -54,3 +62,4 @@ dotnet run --project ../novolis-dogfooding/apps/io/IoSmoke
 |---------|------|
 | `Novolis.IO.Recovery` | Persist mid-edit buffers to disk snapshots |
 | `Novolis.IO.Workspace` | Root-scoped file access |
+

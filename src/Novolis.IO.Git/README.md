@@ -1,3 +1,11 @@
+<!-- novolis-pkg-brand:start -->
+<p align="center">
+  <a href="https://github.com/Novolis-Platform/novolis-io">
+    <img src="https://raw.githubusercontent.com/Novolis-Platform/.github/main/brand/logo-icon.svg" width="72" alt="Novolis"/>
+  </a>
+</p>
+<!-- novolis-pkg-brand:end -->
+
 # Novolis.IO.Git
 
 Thin **process-based** Git helper for Studio-style status, checkpoint commits, pass tracking, and revision tags. Shells out to `git` on PATH via `IGitProcessRunner` (same pattern as other Novolis “driver” packages).
@@ -60,3 +68,4 @@ dotnet run --project ../novolis-dogfooding/apps/io/IoSmoke
 |---------|------|
 | `Novolis.IO.GitHub` | OAuth + sparse GitHub `content/` mirror (no local `git`) |
 | `Novolis.IO.Processes` | Generic process job queue |
+

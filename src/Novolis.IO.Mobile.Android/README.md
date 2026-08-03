@@ -1,3 +1,11 @@
+<!-- novolis-pkg-brand:start -->
+<p align="center">
+  <a href="https://github.com/Novolis-Platform/novolis-io">
+    <img src="https://raw.githubusercontent.com/Novolis-Platform/.github/main/brand/logo-icon.svg" width="72" alt="Novolis"/>
+  </a>
+</p>
+<!-- novolis-pkg-brand:end -->
+
 # Novolis.IO.Mobile.Android
 
 Host-side Android Debug Bridge helpers for Novolis apps and dogfood tools.
@@ -158,3 +166,4 @@ See `novolis-dogfooding/apps/io/AdbLab/README.md`.
 | `Novolis.IO.Git` | Same “thin driver” pattern for local `git` |
 | `Novolis.IO.GitHub` | OAuth + sparse mirror used by Books Mobile |
 | `IoSmoke` (dogfooding) | Paths / Recovery / Watching / Processes / Git |
+

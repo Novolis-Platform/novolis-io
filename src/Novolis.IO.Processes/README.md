@@ -1,3 +1,11 @@
+<!-- novolis-pkg-brand:start -->
+<p align="center">
+  <a href="https://github.com/Novolis-Platform/novolis-io">
+    <img src="https://raw.githubusercontent.com/Novolis-Platform/.github/main/brand/logo-icon.svg" width="72" alt="Novolis"/>
+  </a>
+</p>
+<!-- novolis-pkg-brand:end -->
+
 # Novolis.IO.Processes
 
 Bounded **process job queue** and **process-tree kill** helpers for hosted tools (build, git, converters). Jobs report status for UI binding; cancel kills the process tree on Windows via `taskkill /T /F`.
@@ -58,3 +66,4 @@ dotnet run --project ../novolis-dogfooding/apps/io/IoSmoke
 |---------|------|
 | `Novolis.IO.Git` | Specialized git process wrapper |
 | `Novolis.IO.Mobile.Android` | ADB protocol driver (not a process queue) |
+

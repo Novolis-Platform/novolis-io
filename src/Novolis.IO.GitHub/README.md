@@ -1,3 +1,11 @@
+<!-- novolis-pkg-brand:start -->
+<p align="center">
+  <a href="https://github.com/Novolis-Platform/novolis-io">
+    <img src="https://raw.githubusercontent.com/Novolis-Platform/.github/main/brand/logo-icon.svg" width="72" alt="Novolis"/>
+  </a>
+</p>
+<!-- novolis-pkg-brand:end -->
+
 # Novolis.IO.GitHub
 
 GitHub **OAuth device flow** and a sparse **`content/` repository mirror** (Pull + Save/Commit/Push) via Octokit Git Data API. Aimed at Books Mobile / Studio hosts that should not require a full local `git` clone on every device.
@@ -66,3 +74,4 @@ Used by Books Mobile deploy and Studio flows. Local IO smoke does not cover GitH
 |---------|------|
 | `Novolis.IO.Git` | Local `git` process helper for desktop Studio |
 | `Novolis.IO.Mobile.Android` | Install / debug Android builds that use this mirror |
+

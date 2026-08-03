@@ -1,3 +1,11 @@
+<!-- novolis-pkg-brand:start -->
+<p align="center">
+  <a href="https://github.com/Novolis-Platform/novolis-io">
+    <img src="https://raw.githubusercontent.com/Novolis-Platform/.github/main/brand/logo-icon.svg" width="72" alt="Novolis"/>
+  </a>
+</p>
+<!-- novolis-pkg-brand:end -->
+
 # Novolis.IO.Recovery
 
 Content-hash **draft recovery** snapshots for unsaved or mid-edit document buffers. Writes `.md` + `.json` meta under a configurable root and trims to a max count per document key.
@@ -52,3 +60,4 @@ dotnet run --project ../novolis-dogfooding/apps/io/IoSmoke
 |---------|------|
 | `Novolis.IO.Watching` | Detect file changes that may trigger reload/recover UI |
 | `Novolis.IO.Workspace` | Root-scoped file IO for apps |
+
