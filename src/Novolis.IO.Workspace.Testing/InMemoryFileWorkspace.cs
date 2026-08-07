@@ -71,11 +71,11 @@ public sealed class InMemoryFileWorkspace : IFileWorkspace
             if (!key.StartsWith(dir, StringComparison.OrdinalIgnoreCase))
                 continue;
             var rel = key[dir.Length..];
-            var slash = rel.IndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]);
+            var slash = rel.IndexOf(Separator);
             var name = slash < 0 ? rel : rel[..slash];
             if (string.IsNullOrEmpty(name))
                 continue;
-            var full = Path.Combine(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), name);
+            var full = CombineVirtual(dir.TrimEnd(Separator), name);
             if (seen.Add(full))
                 yield return full;
         }
@@ -85,11 +85,11 @@ public sealed class InMemoryFileWorkspace : IFileWorkspace
             if (!d.StartsWith(dir, StringComparison.OrdinalIgnoreCase))
                 continue;
             var rel = d[dir.Length..];
-            var slash = rel.IndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]);
+            var slash = rel.IndexOf(Separator);
             var name = slash < 0 ? rel : rel[..slash];
             if (string.IsNullOrEmpty(name))
                 continue;
-            var full = Path.Combine(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), name);
+            var full = CombineVirtual(dir.TrimEnd(Separator), name);
             if (seen.Add(full))
                 yield return full;
         }
@@ -117,7 +117,7 @@ public sealed class InMemoryFileWorkspace : IFileWorkspace
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         var p = NormalizePath(path);
-        TouchDirectory(Path.GetDirectoryName(p)!);
+        TouchDirectory(GetDirectoryName(p)!);
         _files[p] = contents;
     }
 
@@ -125,7 +125,7 @@ public sealed class InMemoryFileWorkspace : IFileWorkspace
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         var p = NormalizePath(path);
-        TouchDirectory(Path.GetDirectoryName(p)!);
+        TouchDirectory(GetDirectoryName(p)!);
         _files[p] = Encoding.UTF8.GetBytes(contents);
     }
 
@@ -139,7 +139,7 @@ public sealed class InMemoryFileWorkspace : IFileWorkspace
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         var p = NormalizePath(path);
-        TouchDirectory(Path.GetDirectoryName(p)!);
+        TouchDirectory(GetDirectoryName(p)!);
         _files.AddOrUpdate(
             p,
             _ => Encoding.UTF8.GetBytes(contents),
@@ -169,7 +169,7 @@ public sealed class InMemoryFileWorkspace : IFileWorkspace
 
         if (access is FileAccess.Write or FileAccess.ReadWrite)
         {
-            TouchDirectory(Path.GetDirectoryName(p)!);
+            TouchDirectory(GetDirectoryName(p)!);
             if (mode is FileMode.Create or FileMode.CreateNew)
             {
                 if (mode == FileMode.CreateNew && _files.ContainsKey(p))
@@ -213,7 +213,7 @@ public sealed class InMemoryFileWorkspace : IFileWorkspace
         if (!overwrite && _files.ContainsKey(d))
             throw new IOException("Destination exists");
         _files.TryRemove(s, out _);
-        TouchDirectory(Path.GetDirectoryName(d)!);
+        TouchDirectory(GetDirectoryName(d)!);
         _files[d] = bytes;
     }
 
@@ -230,7 +230,7 @@ public sealed class InMemoryFileWorkspace : IFileWorkspace
     internal void SetBytes(string fullPath, byte[] bytes)
     {
         var p = NormalizePath(fullPath);
-        TouchDirectory(Path.GetDirectoryName(p)!);
+        TouchDirectory(GetDirectoryName(p)!);
         _files[p] = bytes;
     }
 
@@ -238,18 +238,111 @@ public sealed class InMemoryFileWorkspace : IFileWorkspace
     {
         var d = NormalizePath(directoryPath);
         _directories[d] = 0;
-        var parent = Path.GetDirectoryName(d);
+        var parent = GetDirectoryName(d);
         if (!string.IsNullOrEmpty(parent) && !string.Equals(parent, d, StringComparison.OrdinalIgnoreCase))
             TouchDirectory(parent);
     }
 
-    private static string NormalizePath(string path) => Path.GetFullPath(path);
+    // Canonical virtual separator. Windows drive roots (e.g. C:\mem-root) stay absolute
+    // on Linux; Path.GetFullPath would treat '\' as a filename character there.
+    private const char Separator = '/';
+
+    private static string NormalizePath(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        var unified = path.Replace('\\', Separator);
+
+        if (!IsVirtuallyRooted(unified))
+            unified = Path.GetFullPath(path).Replace('\\', Separator);
+
+        return CollapseSegments(unified);
+    }
+
+    private static bool IsVirtuallyRooted(string path) =>
+        path.StartsWith(Separator) ||
+        (path.Length >= 2 && char.IsAsciiLetter(path[0]) && path[1] == ':');
+
+    private static string CollapseSegments(string path)
+    {
+        string root;
+        string remainder;
+
+        if (path.Length >= 2 && char.IsAsciiLetter(path[0]) && path[1] == ':')
+        {
+            root = path[..2];
+            remainder = path.Length > 2 ? path[2..] : string.Empty;
+            if (remainder.StartsWith(Separator))
+                remainder = remainder[1..];
+        }
+        else if (path.StartsWith(Separator))
+        {
+            root = Separator.ToString();
+            remainder = path[1..];
+        }
+        else
+        {
+            root = string.Empty;
+            remainder = path;
+        }
+
+        var parts = new List<string>();
+        foreach (var segment in remainder.Split(Separator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == ".")
+                continue;
+            if (segment == "..")
+            {
+                if (parts.Count > 0)
+                    parts.RemoveAt(parts.Count - 1);
+                continue;
+            }
+
+            parts.Add(segment);
+        }
+
+        if (root == Separator.ToString())
+            return parts.Count == 0 ? root : root + string.Join(Separator, parts);
+
+        if (root.Length == 2 && root[1] == ':')
+            return parts.Count == 0 ? root + Separator : root + Separator + string.Join(Separator, parts);
+
+        return parts.Count == 0 ? string.Empty : string.Join(Separator, parts);
+    }
+
+    private static string? GetDirectoryName(string path)
+    {
+        var n = NormalizePath(path);
+        if (n.Length >= 2 && char.IsAsciiLetter(n[0]) && n[1] == ':' && (n.Length == 2 || (n.Length == 3 && n[2] == Separator)))
+            return null;
+        if (n == Separator.ToString())
+            return null;
+
+        var idx = n.LastIndexOf(Separator);
+        if (idx < 0)
+            return null;
+        if (idx == 0)
+            return Separator.ToString();
+        // "C:/foo" → "C:/"
+        if (idx == 2 && char.IsAsciiLetter(n[0]) && n[1] == ':')
+            return n[..3];
+        return n[..idx];
+    }
+
+    private static string CombineVirtual(string basePath, string relative)
+    {
+        if (string.IsNullOrEmpty(relative))
+            return NormalizePath(basePath);
+        var rel = relative.Replace('\\', Separator).Trim(Separator);
+        var b = NormalizePath(basePath).TrimEnd(Separator);
+        return NormalizePath(string.IsNullOrEmpty(rel) ? b : b + Separator + rel);
+    }
 
     private static string WithTrailingSeparator(string directoryPath)
     {
-        if (directoryPath.EndsWith(Path.DirectorySeparatorChar) || directoryPath.EndsWith(Path.AltDirectorySeparatorChar))
+        if (directoryPath.EndsWith(Separator))
             return directoryPath;
-        return directoryPath + Path.DirectorySeparatorChar;
+        return directoryPath + Separator;
     }
 
     private static bool MatchesSimplePattern(string fileName, string searchPattern)
@@ -300,7 +393,7 @@ public sealed class InMemoryFileWorkspace : IFileWorkspace
         {
             var full = string.IsNullOrEmpty(subpath)
                 ? _owner.RootPath
-                : Path.GetFullPath(Path.Combine(_owner.RootPath, subpath));
+                : CombineVirtual(_owner.RootPath, subpath);
             return new InMemoryFileInfo(_owner, full);
         }
 
@@ -308,7 +401,7 @@ public sealed class InMemoryFileWorkspace : IFileWorkspace
         {
             var full = string.IsNullOrEmpty(subpath)
                 ? _owner.RootPath
-                : Path.GetFullPath(Path.Combine(_owner.RootPath, subpath));
+                : CombineVirtual(_owner.RootPath, subpath);
             return new InMemoryDirectoryContents(_owner, full);
         }
 
@@ -329,7 +422,7 @@ public sealed class InMemoryFileWorkspace : IFileWorkspace
             IsDirectory = _owner._directories.ContainsKey(fullPath) && bytes == null;
             Length = bytes?.Length ?? 0;
             PhysicalPath = fullPath;
-            Name = Path.GetFileName(fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            Name = Path.GetFileName(fullPath.TrimEnd(Separator));
             LastModified = DateTimeOffset.UtcNow;
         }
 
