@@ -5,3 +5,6 @@ artifacts/
 *.user
 *.suo
 .DS_Store
+# MTP / VS test output
+TestResults/
+[Tt]est[Rr]esults/
