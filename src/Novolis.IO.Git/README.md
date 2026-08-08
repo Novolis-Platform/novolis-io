@@ -8,7 +8,11 @@
 
 # Novolis.IO.Git
 
-Thin **process-based** Git helper for Studio-style status, checkpoint commits, pass tracking, and revision tags. Shells out to `git` on PATH via `IGitProcessRunner` (same pattern as other Novolis “driver” packages).
+Process-based Git helper (requires `git` on `PATH`) for Studio and RepoStudio:
+
+- Single-repo: status, checkpoint, passes, fetch/pull/push, branches, working tree, log, diff, stash
+- Commit graph lane layout (`CommitGraphBuilder`) — Avalonia-free DTOs
+- Workspace: discover `novolis-*`, status matrix, batch fetch/pull, branch-cut planner, fetch scheduler
 
 ## Install
 
@@ -16,56 +20,25 @@ Thin **process-based** Git helper for Studio-style status, checkpoint commits, p
 dotnet add package Novolis.IO.Git
 ```
 
-Requires `git` on `PATH`.
-
 ## Quick start
 
 ```csharp
 using Novolis.IO.Git;
 
-var git = new GitRepositoryService(); // uses ProcessGitRunner
+var git = new GitRepositoryService();
 var status = git.GetStatus(repoRoot);
-Console.WriteLine($"{status.Branch} dirty={status.Dirty} ahead={status.Ahead}");
+var graph = git.GetCommitGraph(repoRoot);
 
-var checkpoint = git.Checkpoint(repoRoot, "WIP: save point", new CheckpointOptions
-{
-    Push = false,
-    // Pathspecs = ["src/..."], // optional; default stages -A
-});
-```
-
-## API
-
-| Type | Role |
-|------|------|
-| `GitRepositoryService` | Status, checkpoint, pass start/finish, revision tags |
-| `GitStatus` | Branch, upstream ahead/behind, dirty files, last commit, active pass |
-| `CheckpointOptions` | Optional pathspecs + push-after-commit |
-| `GitOperationResult` | Ok / command / message (+ optional data) |
-| `IGitProcessRunner` / `ProcessGitRunner` | Injectable `git` process runner (tests use fakes) |
-
-### Operations
-
-```csharp
-git.GetStatus(repoRoot);
-git.Checkpoint(repoRoot, message, options);
-git.PassStart(repoRoot);              // records active pass under .novolis/git-passes.json
-git.PassFinish(repoRoot);
-git.CreateRevisionTag(repoRoot, "v1.2.3");
-```
-
-Pass metadata defaults to `.novolis/git-passes.json` (override via ctor).
-
-## Dogfooding
-
-```powershell
-dotnet run --project ../novolis-dogfooding/apps/io/IoSmoke
+var root = GitWorkspace.ResolveRoot();
+var matrix = GitWorkspace.GetStatusMatrix(root, git);
+var batch = new GitWorkspaceBatch(git);
+await batch.FetchAsync(GitWorkspace.SelectByNames(GitWorkspace.Discover(root), null),
+    new BatchOptions { WorkspaceRoot = root });
 ```
 
 ## Related
 
 | Package | Role |
 |---------|------|
-| `Novolis.IO.GitHub` | OAuth + sparse GitHub `content/` mirror (no local `git`) |
-| `Novolis.IO.Processes` | Generic process job queue |
-
+| `Novolis.Avalonia.Git` | Avalonia chrome bound to these DTOs |
+| `Novolis.IO.GitHub` | OAuth + sparse GitHub content mirror |

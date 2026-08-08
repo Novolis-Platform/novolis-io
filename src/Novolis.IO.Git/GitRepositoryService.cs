@@ -4,85 +4,8 @@ using System.Text.Json.Serialization;
 
 namespace Novolis.IO.Git;
 
-/// <summary>Options for checkpoint commits.</summary>
-public sealed class CheckpointOptions
-{
-    /// <summary>When set, only these pathspecs are staged (instead of <c>-A</c>).</summary>
-    public IReadOnlyList<string>? Pathspecs { get; init; }
-
-    /// <summary>Whether to push after a successful commit.</summary>
-    public bool Push { get; init; } = true;
-}
-
-/// <summary>Compact git status snapshot.</summary>
-public sealed class GitStatus
-{
-    /// <summary>Current branch name.</summary>
-    public required string Branch { get; init; }
-
-    /// <summary>Upstream branch, if any.</summary>
-    public string? Upstream { get; init; }
-
-    /// <summary>Commits ahead of upstream.</summary>
-    public int Ahead { get; init; }
-
-    /// <summary>Commits behind upstream.</summary>
-    public int Behind { get; init; }
-
-    /// <summary>Whether the work tree is dirty.</summary>
-    public bool Dirty { get; init; }
-
-    /// <summary>Porcelain dirty file lines.</summary>
-    public IReadOnlyList<string> DirtyFiles { get; init; } = [];
-
-    /// <summary>Active pass id from the pass store, if any.</summary>
-    public string? ActivePass { get; init; }
-
-    /// <summary>Last commit ISO timestamp.</summary>
-    public string? LastCommitAt { get; init; }
-
-    /// <summary>Last commit short sha.</summary>
-    public string? LastCommitSha { get; init; }
-
-    /// <summary>Last commit subject.</summary>
-    public string? LastCommitMessage { get; init; }
-}
-
-/// <summary>Generic operation result.</summary>
-public sealed class GitOperationResult
-{
-    /// <summary>Creates a result.</summary>
-    public GitOperationResult(bool ok, string command, string message, object? data = null)
-    {
-        Ok = ok;
-        Command = command;
-        Message = message;
-        Data = data;
-    }
-
-    /// <summary>Whether the operation succeeded.</summary>
-    public bool Ok { get; }
-
-    /// <summary>Logical command name.</summary>
-    public string Command { get; }
-
-    /// <summary>Human-readable message.</summary>
-    public string Message { get; }
-
-    /// <summary>Optional structured payload.</summary>
-    public object? Data { get; }
-
-    /// <summary>Success factory.</summary>
-    public static GitOperationResult Success(string command, string message, object? data = null) =>
-        new(true, command, message, data);
-
-    /// <summary>Failure factory.</summary>
-    public static GitOperationResult Fail(string command, string message, object? data = null) =>
-        new(false, command, message, data);
-}
-
-/// <summary>Git repository helper for status, checkpoint, passes, and tags.</summary>
-public sealed class GitRepositoryService
+/// <summary>Git repository helper for status, history, stash, branches, and workspace ops.</summary>
+public sealed partial class GitRepositoryService
 {
     readonly IGitProcessRunner _runner;
     readonly string _passStoreRelativePath;
@@ -97,6 +20,9 @@ public sealed class GitRepositoryService
             ? Path.Combine(".novolis", "git-passes.json")
             : passStoreRelativePath;
     }
+
+    /// <summary>Underlying process runner (for workspace batch sharing).</summary>
+    public IGitProcessRunner Runner => _runner;
 
     /// <summary>Reads repository status.</summary>
     public GitStatus GetStatus(string repoRoot)
@@ -257,7 +183,7 @@ public sealed class GitRepositoryService
         return GitOperationResult.Success("revision create", $"Tagged {tag} on {defaultBranch}.", new { tag, branch = defaultBranch });
     }
 
-    string DetectDefaultBranch(string repoRoot)
+    internal string DetectDefaultBranch(string repoRoot)
     {
         foreach (var name in new[] { "main", "master" })
         {
@@ -272,7 +198,7 @@ public sealed class GitRepositoryService
         return "main";
     }
 
-    static (int ahead, int behind) ParseAheadBehind(string line)
+    internal static (int ahead, int behind) ParseAheadBehind(string line)
     {
         var parts = line.Split('\t', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (parts.Length >= 2
@@ -282,20 +208,22 @@ public sealed class GitRepositoryService
         return (0, 0);
     }
 
-    void EnsureGitRepo(string repoRoot)
+    internal void EnsureGitRepo(string repoRoot)
     {
         var r = _runner.Run(repoRoot, "rev-parse", "--git-dir");
         if (r.ExitCode != 0)
             throw new InvalidOperationException("Not a git repository.");
     }
 
-    string RunText(string repoRoot, params string[] args)
+    internal string RunText(string repoRoot, params string[] args)
     {
         var r = _runner.Run(repoRoot, args);
         if (r.ExitCode != 0 && !string.IsNullOrWhiteSpace(r.StdErr))
             return r.StdErr;
         return r.StdOut;
     }
+
+    internal GitProcessResult Run(string repoRoot, params string[] args) => _runner.Run(repoRoot, args);
 }
 
 sealed class PassStore
