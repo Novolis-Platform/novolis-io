@@ -69,9 +69,7 @@ public sealed class RecoveryExtendedTests
         {
             var store = new ContentRecoveryStore(temp.FullName, maxSnapshotsPerDocument: 2);
             store.WriteSnapshot("doc", "v1");
-            Thread.Sleep(1100);
             store.WriteSnapshot("doc", "v2");
-            Thread.Sleep(1100);
             store.WriteSnapshot("doc", "v3");
             var latest = store.GetLatest("doc");
             await Assert.That(latest).IsNotNull();

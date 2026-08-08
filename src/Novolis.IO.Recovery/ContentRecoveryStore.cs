@@ -44,9 +44,16 @@ public sealed class ContentRecoveryStore
     {
         var dir = Path.Combine(RootDirectory, SanitizeId(documentKey));
         Directory.CreateDirectory(dir);
-        var stamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
+        var stamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmssfff'Z'");
         var mdPath = Path.Combine(dir, $"{stamp}.md");
         var metaPath = Path.Combine(dir, $"{stamp}.json");
+        // Avoid same-ms overwrite when callers write back-to-back.
+        if (File.Exists(mdPath))
+        {
+            stamp += "-" + Guid.NewGuid().ToString("N")[..8];
+            mdPath = Path.Combine(dir, $"{stamp}.md");
+            metaPath = Path.Combine(dir, $"{stamp}.json");
+        }
         File.WriteAllText(mdPath, content);
         var meta = new
         {
@@ -64,7 +71,12 @@ public sealed class ContentRecoveryStore
         var dir = Path.Combine(RootDirectory, SanitizeId(documentKey));
         if (!Directory.Exists(dir))
             return null;
-        var latest = Directory.GetFiles(dir, "*.md").OrderDescending(StringComparer.Ordinal).FirstOrDefault();
+        // Prefer write time over filename order: collision suffixes like stamp-guid sort
+        // before stamp.md under ordinal compare and would pick the wrong "latest".
+        var latest = Directory.GetFiles(dir, "*.md")
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .ThenByDescending(static p => p, StringComparer.Ordinal)
+            .FirstOrDefault();
         if (latest is null)
             return null;
 
@@ -116,7 +128,10 @@ public sealed class ContentRecoveryStore
 
     void TrimOldSnapshots(string dir)
     {
-        var files = Directory.GetFiles(dir, "*.md").OrderDescending(StringComparer.Ordinal).ToList();
+        var files = Directory.GetFiles(dir, "*.md")
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .ThenByDescending(static p => p, StringComparer.Ordinal)
+            .ToList();
         foreach (var old in files.Skip(MaxSnapshotsPerDocument))
         {
             try

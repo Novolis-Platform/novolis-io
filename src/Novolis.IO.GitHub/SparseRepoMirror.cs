@@ -16,7 +16,7 @@ public sealed class SparseRepoMirrorOptions
     /// <summary>Local workspace root that will contain <c>content/</c>.</summary>
     public required string WorkspaceRoot { get; init; }
 
-    /// <summary>Path prefix to mirror (default <c>content/</c>).</summary>
+    /// <summary>Path prefix to mirror (default <c>content/</c>; NMP books use <c>src/</c>). Always also pulls root <c>manuscript.yaml</c> when present.</summary>
     public string ContentPrefix { get; init; } = "content/";
 }
 
@@ -149,11 +149,13 @@ public sealed class SparseRepoMirror
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var path = item.Path.Replace('\\', '/');
-                if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                var isWorkspaceMarker = string.Equals(path, "manuscript.yaml", StringComparison.OrdinalIgnoreCase);
+                if (!isWorkspaceMarker
+                    && !path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
                     && !string.Equals(path, prefix.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                // Skip large binary assets under content/**/assets/
+                // Skip large binary assets under **/Assets/ or **/assets/
                 if (path.Contains("/assets/", StringComparison.OrdinalIgnoreCase))
                     continue;
 
