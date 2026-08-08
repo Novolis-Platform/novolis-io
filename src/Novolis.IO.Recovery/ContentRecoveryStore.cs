@@ -71,7 +71,12 @@ public sealed class ContentRecoveryStore
         var dir = Path.Combine(RootDirectory, SanitizeId(documentKey));
         if (!Directory.Exists(dir))
             return null;
-        var latest = Directory.GetFiles(dir, "*.md").OrderDescending(StringComparer.Ordinal).FirstOrDefault();
+        // Prefer write time over filename order: collision suffixes like stamp-guid sort
+        // before stamp.md under ordinal compare and would pick the wrong "latest".
+        var latest = Directory.GetFiles(dir, "*.md")
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .ThenByDescending(static p => p, StringComparer.Ordinal)
+            .FirstOrDefault();
         if (latest is null)
             return null;
 
@@ -123,7 +128,10 @@ public sealed class ContentRecoveryStore
 
     void TrimOldSnapshots(string dir)
     {
-        var files = Directory.GetFiles(dir, "*.md").OrderDescending(StringComparer.Ordinal).ToList();
+        var files = Directory.GetFiles(dir, "*.md")
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .ThenByDescending(static p => p, StringComparer.Ordinal)
+            .ToList();
         foreach (var old in files.Skip(MaxSnapshotsPerDocument))
         {
             try
