@@ -8,3 +8,8 @@ artifacts/
 # MTP / VS test output
 TestResults/
 [Tt]est[Rr]esults/
+# JetBrains / Rider
+.idea/
+**/.idea/
+DotSettings.*
+*.DotSettings.user
