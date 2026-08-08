@@ -25,6 +25,10 @@ public sealed class FetchScheduler : IAsyncDisposable
     public bool IsRunning => _loop is { IsCompleted: false };
 
     /// <summary>Starts periodic fetch.</summary>
+    /// <param name="workspaceRoot">Workspace root for discover + state.</param>
+    /// <param name="interval">Delay between cycles (and before the first when <paramref name="delayBeforeFirst"/>).</param>
+    /// <param name="filter">Optional repo filter.</param>
+    /// <param name="parallel">Max parallel fetch degree.</param>
     /// <param name="delayBeforeFirst">When true (default), wait <paramref name="interval"/> before the first cycle so UI startup is not contested.</param>
     public void Start(
         string workspaceRoot,
