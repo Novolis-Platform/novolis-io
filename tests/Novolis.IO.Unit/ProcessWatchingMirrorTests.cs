@@ -161,7 +161,7 @@ public sealed class SingleFileWatcherTests
     }
 }
 
-public sealed class BooksRepoMirrorExtendedTests
+public sealed class SparseRepoMirrorExtendedTests
 {
     [Test]
     public async Task NoteDirty_deduplicates_and_persists()
@@ -169,9 +169,9 @@ public sealed class BooksRepoMirrorExtendedTests
         var temp = Directory.CreateTempSubdirectory("novolis-io-mirror-dirty-");
         try
         {
-            var mirror = new BooksRepoMirror(
-                BooksRepoMirror.CreateClient("gho_test"),
-                new BooksRepoMirrorOptions { Owner = "o", Name = "n", WorkspaceRoot = temp.FullName });
+            var mirror = new SparseRepoMirror(
+                SparseRepoMirror.CreateClient("gho_test"),
+                new SparseRepoMirrorOptions { Owner = "o", Name = "n", WorkspaceRoot = temp.FullName });
 
             mirror.NoteDirty("content/a.md");
             mirror.NoteDirty("content/a.md");
@@ -190,9 +190,9 @@ public sealed class BooksRepoMirrorExtendedTests
         var temp = Directory.CreateTempSubdirectory("novolis-io-mirror-nopull-");
         try
         {
-            var mirror = new BooksRepoMirror(
-                BooksRepoMirror.CreateClient("gho_test"),
-                new BooksRepoMirrorOptions { Owner = "o", Name = "n", WorkspaceRoot = temp.FullName });
+            var mirror = new SparseRepoMirror(
+                SparseRepoMirror.CreateClient("gho_test"),
+                new SparseRepoMirrorOptions { Owner = "o", Name = "n", WorkspaceRoot = temp.FullName });
             mirror.NoteDirty("content/x.md");
             var result = await mirror.SaveCommitPushAsync();
             await Assert.That(result.Ok).IsFalse();
@@ -210,9 +210,9 @@ public sealed class BooksRepoMirrorExtendedTests
         var temp = Directory.CreateTempSubdirectory("novolis-io-mirror-state-");
         try
         {
-            var mirror = new BooksRepoMirror(
-                BooksRepoMirror.CreateClient("gho_test"),
-                new BooksRepoMirrorOptions { Owner = "o", Name = "n", WorkspaceRoot = temp.FullName });
+            var mirror = new SparseRepoMirror(
+                SparseRepoMirror.CreateClient("gho_test"),
+                new SparseRepoMirrorOptions { Owner = "o", Name = "n", WorkspaceRoot = temp.FullName });
             await Assert.That(mirror.Branch).IsNull();
 
             var stateDir = Path.Combine(temp.FullName, ".novolis");
@@ -234,6 +234,6 @@ public sealed class BooksRepoMirrorExtendedTests
     [Test]
     public async Task CreateClient_rejects_blank_token()
     {
-        await Assert.That(() => BooksRepoMirror.CreateClient("")).Throws<ArgumentException>();
+        await Assert.That(() => SparseRepoMirror.CreateClient("")).Throws<ArgumentException>();
     }
 }

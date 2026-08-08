@@ -7,7 +7,7 @@ using Octokit.Internal;
 
 namespace Novolis.IO.Unit;
 
-public sealed class BooksRepoMirrorOctokitTests
+public sealed class SparseRepoMirrorOctokitTests
 {
     const string CommitSha = "abc1234567890abcdef1234567890abcdef1234567";
     const string TreeSha = "tree1234567890abcdef1234567890abcdef1234567";
@@ -161,7 +161,7 @@ public sealed class BooksRepoMirrorOctokitTests
         }
     }
 
-    static BooksRepoMirror CreateMirror(string workspaceRoot, FakeGitHubApi api)
+    static SparseRepoMirror CreateMirror(string workspaceRoot, FakeGitHubApi api)
     {
         var connection = new Connection(
             new ProductHeaderValue("Novolis.IO.Test"),
@@ -169,7 +169,7 @@ public sealed class BooksRepoMirrorOctokitTests
             new InMemoryCredentialStore(new Credentials("test-token")),
             new HttpClientAdapter(() => new FakeGitHubHandler(api)),
             new SimpleJsonSerializer());
-        return new BooksRepoMirror(new GitHubClient(connection), new BooksRepoMirrorOptions
+        return new SparseRepoMirror(new GitHubClient(connection), new SparseRepoMirrorOptions
         {
             Owner = "test-owner",
             Name = "books",

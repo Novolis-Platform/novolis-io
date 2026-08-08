@@ -4,8 +4,8 @@ using Octokit;
 
 namespace Novolis.IO.GitHub;
 
-/// <summary>Options for <see cref="BooksRepoMirror"/>.</summary>
-public sealed class BooksRepoMirrorOptions
+/// <summary>Options for <see cref="SparseRepoMirror"/>.</summary>
+public sealed class SparseRepoMirrorOptions
 {
     /// <summary>Repository owner (e.g. <c>frankhaugen</c>).</summary>
     public required string Owner { get; init; }
@@ -71,9 +71,9 @@ public sealed class MirrorPushResult
 }
 
 /// <summary>
-/// Sparse GitHub mirror of a books repo <c>content/</c> tree using the Git Data API.
+/// Sparse GitHub mirror of a repository tree <c>content/</c> tree using the Git Data API.
 /// </summary>
-public sealed class BooksRepoMirror
+public sealed class SparseRepoMirror
 {
     static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -82,11 +82,11 @@ public sealed class BooksRepoMirror
     };
 
     readonly GitHubClient _client;
-    readonly BooksRepoMirrorOptions _options;
+    readonly SparseRepoMirrorOptions _options;
     readonly string _statePath;
 
     /// <summary>Creates a mirror bound to an authenticated <see cref="GitHubClient"/>.</summary>
-    public BooksRepoMirror(GitHubClient client, BooksRepoMirrorOptions options)
+    public SparseRepoMirror(GitHubClient client, SparseRepoMirrorOptions options)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -204,7 +204,7 @@ public sealed class BooksRepoMirror
                 return new MirrorPushResult(true, "Nothing to commit.", state.CommitSha, 0);
 
             var commitMessage = string.IsNullOrWhiteSpace(message)
-                ? $"BooksMobile {DateTime.Now:yyyy-MM-dd HH:mm}"
+                ? $"Sparse mirror {DateTime.Now:yyyy-MM-dd HH:mm}"
                 : message.Trim();
 
             var newTreeItems = new List<NewTreeItem>();

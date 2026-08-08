@@ -58,8 +58,8 @@ public sealed class GitHubTests
         var temp = Directory.CreateTempSubdirectory("novolis-io-github-");
         try
         {
-            var client = BooksRepoMirror.CreateClient("gho_dummy_for_state_only");
-            var mirror = new BooksRepoMirror(client, new BooksRepoMirrorOptions
+            var client = SparseRepoMirror.CreateClient("gho_dummy_for_state_only");
+            var mirror = new SparseRepoMirror(client, new SparseRepoMirrorOptions
             {
                 Owner = "frankhaugen",
                 Name = "books",
