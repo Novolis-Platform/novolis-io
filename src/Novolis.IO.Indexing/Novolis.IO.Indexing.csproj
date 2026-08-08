@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Novolis.IO.Indexing</PackageId>
+    <Description>In-memory, format-agnostic content index: entries, aliases, open facets, and directed links.</Description>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>Novolis.IO.Indexing</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>

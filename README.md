@@ -40,6 +40,7 @@
 |---------|---------|----------------|
 | `Novolis.IO.Git` | `dotnet add package Novolis.IO.Git` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Git/README.md) |
 | `Novolis.IO.GitHub` | `dotnet add package Novolis.IO.GitHub` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.GitHub/README.md) |
+| `Novolis.IO.Indexing` | `dotnet add package Novolis.IO.Indexing` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Indexing/README.md) |
 | `Novolis.IO.Mobile.Android` | `dotnet add package Novolis.IO.Mobile.Android` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Mobile.Android/README.md) |
 | `Novolis.IO.Paths` | `dotnet add package Novolis.IO.Paths` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Paths/README.md) |
 | `Novolis.IO.Processes` | `dotnet add package Novolis.IO.Processes` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Processes/README.md) |
@@ -59,6 +60,7 @@ Small **I/O and tooling** libraries for Novolis apps: git/GitHub, paths, watchin
 |---------|--------|
 | Git | [src/Novolis.IO.Git/README.md](src/Novolis.IO.Git/README.md) |
 | GitHub | [src/Novolis.IO.GitHub/README.md](src/Novolis.IO.GitHub/README.md) |
+| Indexing | [src/Novolis.IO.Indexing/README.md](src/Novolis.IO.Indexing/README.md) |
 | Paths | [src/Novolis.IO.Paths/README.md](src/Novolis.IO.Paths/README.md) |
 | Watching | [src/Novolis.IO.Watching/README.md](src/Novolis.IO.Watching/README.md) |
 | Recovery | [src/Novolis.IO.Recovery/README.md](src/Novolis.IO.Recovery/README.md) |
