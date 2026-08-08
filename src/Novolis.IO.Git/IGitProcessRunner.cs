@@ -21,7 +21,8 @@ public sealed class ProcessGitRunner : IGitProcessRunner
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            UseShellExecute = false
+            UseShellExecute = false,
+            CreateNoWindow = true,
         };
         foreach (var arg in args)
             psi.ArgumentList.Add(arg);
