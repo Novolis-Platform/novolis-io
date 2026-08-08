@@ -24,42 +24,99 @@ public sealed partial class GitRepositoryService
     /// <summary>Underlying process runner (for workspace batch sharing).</summary>
     public IGitProcessRunner Runner => _runner;
 
-    /// <summary>Reads repository status.</summary>
-    public GitStatus GetStatus(string repoRoot)
+    /// <summary>Reads repository status (full: last commit + pass store).</summary>
+    public GitStatus GetStatus(string repoRoot) => GetStatus(repoRoot, lite: false);
+
+    /// <summary>
+    /// Reads repository status. When <paramref name="lite"/> is true, uses a single
+    /// <c>git status -b --porcelain</c> and skips last-commit / pass metadata (matrix-friendly).
+    /// </summary>
+    public GitStatus GetStatus(string repoRoot, bool lite)
     {
         EnsureGitRepo(repoRoot);
-        var branch = RunText(repoRoot, "rev-parse", "--abbrev-ref", "HEAD").Trim();
-        var dirty = RunText(repoRoot, "status", "--porcelain").Trim();
-        var upstreamRaw = RunText(repoRoot, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").Trim();
-        var upstream = upstreamRaw.Contains("fatal", StringComparison.OrdinalIgnoreCase) ? null : upstreamRaw;
-        var aheadBehind = upstream is null
-            ? (ahead: 0, behind: 0)
-            : ParseAheadBehind(RunText(repoRoot, "rev-list", "--left-right", "--count", $"{upstream}...HEAD").Trim());
+        var statusOut = RunText(repoRoot, "status", "-b", "--porcelain").TrimEnd();
+        var lines = statusOut.Split(['\r', '\n'], StringSplitOptions.None);
+        var branch = "HEAD";
+        string? upstream = null;
+        var ahead = 0;
+        var behind = 0;
+        var dirtyFiles = new List<string>();
 
-        var passes = PassStore.Load(repoRoot, _passStoreRelativePath);
-        var lastCommit = RunText(repoRoot, "log", "-1", "--format=%cI|%h|%s").Trim();
-        string? lastAt = null, lastSha = null, lastMsg = null;
-        if (!string.IsNullOrEmpty(lastCommit) && lastCommit.Contains('|'))
+        foreach (var line in lines)
         {
-            var parts = lastCommit.Split('|', 3);
-            lastAt = parts[0];
-            lastSha = parts[1];
-            lastMsg = parts.Length > 2 ? parts[2] : null;
+            if (line.StartsWith("## ", StringComparison.Ordinal))
+            {
+                ParseBranchHeader(line[3..], out branch, out upstream, out ahead, out behind);
+                continue;
+            }
+
+            if (line.Length > 0)
+                dirtyFiles.Add(line);
+        }
+
+        string? lastAt = null, lastSha = null, lastMsg = null, activePass = null;
+        if (!lite)
+        {
+            var passes = PassStore.Load(repoRoot, _passStoreRelativePath);
+            activePass = passes.ActivePass;
+            var lastCommit = RunText(repoRoot, "log", "-1", "--format=%cI|%h|%s").Trim();
+            if (!string.IsNullOrEmpty(lastCommit) && lastCommit.Contains('|'))
+            {
+                var parts = lastCommit.Split('|', 3);
+                lastAt = parts[0];
+                lastSha = parts[1];
+                lastMsg = parts.Length > 2 ? parts[2] : null;
+            }
         }
 
         return new GitStatus
         {
             Branch = branch,
             Upstream = upstream,
-            Ahead = aheadBehind.ahead,
-            Behind = aheadBehind.behind,
-            Dirty = !string.IsNullOrEmpty(dirty),
-            DirtyFiles = dirty.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries),
-            ActivePass = passes.ActivePass,
+            Ahead = ahead,
+            Behind = behind,
+            Dirty = dirtyFiles.Count > 0,
+            DirtyFiles = dirtyFiles,
+            ActivePass = activePass,
             LastCommitAt = lastAt,
             LastCommitSha = lastSha,
             LastCommitMessage = lastMsg
         };
+    }
+
+    static void ParseBranchHeader(string header, out string branch, out string? upstream, out int ahead, out int behind)
+    {
+        branch = "HEAD";
+        upstream = null;
+        ahead = 0;
+        behind = 0;
+        // main...origin/main [ahead 1, behind 2]
+        var bracket = header.IndexOf(" [", StringComparison.Ordinal);
+        var core = bracket >= 0 ? header[..bracket] : header;
+        var dots = core.IndexOf("...", StringComparison.Ordinal);
+        if (dots >= 0)
+        {
+            branch = core[..dots].Trim();
+            upstream = core[(dots + 3)..].Trim();
+        }
+        else
+        {
+            branch = core.Trim();
+        }
+
+        if (bracket >= 0)
+        {
+            var meta = header[(bracket + 2)..].Trim().TrimEnd(']');
+            foreach (var part in meta.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (part.StartsWith("ahead ", StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(part["ahead ".Length..], out var a))
+                    ahead = a;
+                else if (part.StartsWith("behind ", StringComparison.OrdinalIgnoreCase)
+                         && int.TryParse(part["behind ".Length..], out var b))
+                    behind = b;
+            }
+        }
     }
 
     /// <summary>Stages, commits, and optionally pushes a checkpoint.</summary>

@@ -18,10 +18,7 @@ public sealed class GitRepositoryServiceTests
 
             var runner = new FakeGitRunner();
             runner.Set(["rev-parse", "--git-dir"], 0, ".git\n");
-            runner.Set(["rev-parse", "--abbrev-ref", "HEAD"], 0, "feature\n");
-            runner.Set(["status", "--porcelain"], 0, "");
-            runner.Set(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], 0, "origin/feature\n");
-            runner.Set(["rev-list", "--left-right", "--count", "origin/feature...HEAD"], 0, "2\t3\n");
+            runner.Set(["status", "-b", "--porcelain"], 0, "## feature...origin/feature [ahead 3, behind 2]\n");
             runner.Set(["log", "-1", "--format=%cI|%h|%s"], 0, "2026-01-02T00:00:00Z|deadbeef|msg\n");
 
             var git = new GitRepositoryService(runner);

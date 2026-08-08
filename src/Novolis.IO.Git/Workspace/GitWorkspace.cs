@@ -179,7 +179,8 @@ public static class GitWorkspace
         bool includeStashCount = true,
         int parallel = 8)
     {
-        return GetStatusMatrixAsync(root, git, filter, state, includeStashCount, parallel)
+        return GetStatusMatrixAsync(root, git, filter, state, includeStashCount, parallel, liteStatus: true)
+            .ConfigureAwait(false)
             .GetAwaiter()
             .GetResult();
     }
@@ -192,12 +193,15 @@ public static class GitWorkspace
         RepoStateStore? state = null,
         bool includeStashCount = true,
         int parallel = 8,
+        bool liteStatus = true,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(git);
+        // Yield immediately so callers on the UI thread never run Discover/git sync.
+        await Task.Yield();
         root = Path.GetFullPath(root);
-        state ??= RepoStateStore.Load(root);
-        var discovered = Discover(root);
+        state ??= await Task.Run(() => RepoStateStore.Load(root), cancellationToken).ConfigureAwait(false);
+        var discovered = await Task.Run(() => Discover(root), cancellationToken).ConfigureAwait(false);
         var selected = SelectByNames(discovered, filter);
         var degree = Math.Clamp(parallel, 1, 32);
         var bag = new System.Collections.Concurrent.ConcurrentBag<RepoStatusRow>();
@@ -209,7 +213,7 @@ public static class GitWorkspace
             {
                 try
                 {
-                    var status = git.GetStatus(repo.Path);
+                    var status = git.GetStatus(repo.Path, lite: liteStatus);
                     if (filter?.Dirty is true && !status.Dirty)
                         return ValueTask.CompletedTask;
                     if (filter?.Dirty is false && status.Dirty)

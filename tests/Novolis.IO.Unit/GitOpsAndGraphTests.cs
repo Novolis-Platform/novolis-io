@@ -24,7 +24,8 @@ public sealed class GitOpsAndGraphTests
     {
         var flex = new FlexibleGitRunner();
         flex.When(a => a is ["rev-parse", "--git-dir"], 0, ".git\n");
-        flex.When(a => a is ["status", "--porcelain"], 0, "M  staged.cs\n M unstaged.cs\n?? untracked.cs\n");
+            flex.When(a => a is ["status", "--porcelain"] || a is ["status", "-b", "--porcelain"], 0,
+                "M  staged.cs\n M unstaged.cs\n?? untracked.cs\n");
 
         var git = new GitRepositoryService(flex);
         var wt = git.GetWorkingTree("/repo");
@@ -165,9 +166,7 @@ public sealed class GitOpsAndGraphTests
             // Rebuild flex carefully for GetStatus
             var flex2 = new FlexibleGitRunner();
             flex2.When(a => a is ["rev-parse", "--git-dir"], 0, ".git\n");
-            flex2.When(a => a is ["rev-parse", "--abbrev-ref", "HEAD"], 0, "main\n");
-            flex2.When(a => a is ["status", "--porcelain"], 0, " M dirty.cs\n");
-            flex2.When(a => a.Length >= 3 && a[0] == "rev-parse" && a[1] == "--abbrev-ref", 1, "", "fatal\n");
+            flex2.When(a => a is ["status", "-b", "--porcelain"], 0, "## main\n M dirty.cs\n");
             flex2.When(a => a[0] == "log", 0, "2026-01-01T00:00:00Z|abc|msg\n");
 
             var planner = new BranchCutPlanner(new GitRepositoryService(flex2));

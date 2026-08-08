@@ -53,9 +53,7 @@ public sealed class IoTests
     {
         var runner = new FakeGitRunner();
         runner.Set(["rev-parse", "--git-dir"], 0, ".git\n");
-        runner.Set(["rev-parse", "--abbrev-ref", "HEAD"], 0, "main\n");
-        runner.Set(["status", "--porcelain"], 0, " M file.txt\n");
-        runner.Set(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], 128, "", "fatal: no upstream\n");
+        runner.Set(["status", "-b", "--porcelain"], 0, "## main\n M file.txt\n");
         runner.Set(["log", "-1", "--format=%cI|%h|%s"], 0, "2026-01-01T00:00:00Z|abc123|hello\n");
 
         var git = new GitRepositoryService(runner);

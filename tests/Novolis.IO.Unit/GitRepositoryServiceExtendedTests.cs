@@ -79,12 +79,16 @@ public sealed class GitRepositoryServiceExtendedTests
         runner.Set(["rev-parse", "--verify", "main"], 128, "", "fatal\n");
         runner.Set(["rev-parse", "--verify", "master"], 128, "", "fatal\n");
         runner.Set(["symbolic-ref", "refs/remotes/origin/HEAD"], 0, "refs/remotes/origin/develop\n");
-        runner.Set(["status", "--porcelain"], 0, "");
-        runner.Set(["rev-parse", "--abbrev-ref", "HEAD"], 0, "develop\n");
-        runner.Set(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], 0, "fatal\n");
+        runner.Set(["status", "-b", "--porcelain"], 0, "## develop...origin/develop\n");
         runner.Set(["log", "-1", "--format=%cI|%h|%s"], 0, "2026-01-01T00:00:00Z|abc|msg\n");
         var git = new GitRepositoryService(runner);
         var status = git.GetStatus("/repo");
         await Assert.That(status.Branch).IsEqualTo("develop");
+        // CreateRevisionTag still uses DetectDefaultBranch via symbolic-ref.
+        runner.Set(["checkout", "develop"], 0, "");
+        runner.Set(["tag", "v0", "develop"], 0, "");
+        runner.Set(["push", "origin", "v0"], 0, "");
+        var tag = git.CreateRevisionTag("/repo", "v0");
+        await Assert.That(tag.Ok).IsTrue();
     }
 }
