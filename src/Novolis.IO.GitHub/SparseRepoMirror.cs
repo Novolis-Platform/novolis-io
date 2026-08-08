@@ -24,12 +24,18 @@ public sealed class SparseRepoMirrorOptions
 public sealed class MirrorPullResult
 {
     /// <summary>Creates a pull result.</summary>
-    public MirrorPullResult(bool ok, string message, string? commitSha = null, int fileCount = 0)
+    public MirrorPullResult(
+        bool ok,
+        string message,
+        string? commitSha = null,
+        int fileCount = 0,
+        bool requiresReauthentication = false)
     {
         Ok = ok;
         Message = message;
         CommitSha = commitSha;
         FileCount = fileCount;
+        RequiresReauthentication = requiresReauthentication;
     }
 
     /// <summary>Whether the pull succeeded.</summary>
@@ -43,18 +49,27 @@ public sealed class MirrorPullResult
 
     /// <summary>Number of files written.</summary>
     public int FileCount { get; }
+
+    /// <summary>Token was rejected — host should clear credentials and ask the user to sign in again.</summary>
+    public bool RequiresReauthentication { get; }
 }
 
 /// <summary>Result of Save/Commit/Push.</summary>
 public sealed class MirrorPushResult
 {
     /// <summary>Creates a push result.</summary>
-    public MirrorPushResult(bool ok, string message, string? commitSha = null, int fileCount = 0)
+    public MirrorPushResult(
+        bool ok,
+        string message,
+        string? commitSha = null,
+        int fileCount = 0,
+        bool requiresReauthentication = false)
     {
         Ok = ok;
         Message = message;
         CommitSha = commitSha;
         FileCount = fileCount;
+        RequiresReauthentication = requiresReauthentication;
     }
 
     /// <summary>Whether the push succeeded.</summary>
@@ -68,6 +83,9 @@ public sealed class MirrorPushResult
 
     /// <summary>Number of files included in the commit.</summary>
     public int FileCount { get; }
+
+    /// <summary>Token was rejected — host should clear credentials and ask the user to sign in again.</summary>
+    public bool RequiresReauthentication { get; }
 }
 
 /// <summary>
@@ -183,7 +201,11 @@ public sealed class SparseRepoMirror
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new MirrorPullResult(false, ex.Message);
+            var reauth = GitHubAccessToken.IsUnauthorized(ex);
+            var message = reauth
+                ? "GitHub session expired — sign in again."
+                : ex.Message;
+            return new MirrorPullResult(false, message, requiresReauthentication: reauth);
         }
     }
 
@@ -277,7 +299,11 @@ public sealed class SparseRepoMirror
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new MirrorPushResult(false, ex.Message);
+            var reauth = GitHubAccessToken.IsUnauthorized(ex);
+            var status = reauth
+                ? "GitHub session expired — sign in again."
+                : ex.Message;
+            return new MirrorPushResult(false, status, requiresReauthentication: reauth);
         }
     }
 

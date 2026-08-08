@@ -124,6 +124,15 @@ public sealed class GitHubTests
         await Assert.That(result.IsPending).IsTrue();
     }
 
+    [Test]
+    public async Task AccessToken_LooksLikeUnauthorized_detects_bad_credentials()
+    {
+        await Assert.That(GitHubAccessToken.LooksLikeUnauthorizedMessage("Bad credentials")).IsTrue();
+        await Assert.That(GitHubAccessToken.LooksLikeUnauthorizedMessage("ok")).IsFalse();
+        await Assert.That(GitHubAccessToken.IsUnauthorized(new InvalidOperationException("Bad credentials")))
+            .IsTrue();
+    }
+
     sealed class QueueHandler : HttpMessageHandler
     {
         readonly Queue<HttpResponseMessage> _responses;
