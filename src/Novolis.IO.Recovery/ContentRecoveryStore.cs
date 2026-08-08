@@ -44,9 +44,16 @@ public sealed class ContentRecoveryStore
     {
         var dir = Path.Combine(RootDirectory, SanitizeId(documentKey));
         Directory.CreateDirectory(dir);
-        var stamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
+        var stamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmssfff'Z'");
         var mdPath = Path.Combine(dir, $"{stamp}.md");
         var metaPath = Path.Combine(dir, $"{stamp}.json");
+        // Avoid same-ms overwrite when callers write back-to-back.
+        if (File.Exists(mdPath))
+        {
+            stamp += "-" + Guid.NewGuid().ToString("N")[..8];
+            mdPath = Path.Combine(dir, $"{stamp}.md");
+            metaPath = Path.Combine(dir, $"{stamp}.json");
+        }
         File.WriteAllText(mdPath, content);
         var meta = new
         {
