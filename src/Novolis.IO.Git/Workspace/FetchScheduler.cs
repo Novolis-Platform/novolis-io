@@ -25,13 +25,31 @@ public sealed class FetchScheduler : IAsyncDisposable
     public bool IsRunning => _loop is { IsCompleted: false };
 
     /// <summary>Starts periodic fetch.</summary>
-    public void Start(string workspaceRoot, TimeSpan interval, RepoFilter? filter = null, int parallel = 6)
+    /// <param name="delayBeforeFirst">When true (default), wait <paramref name="interval"/> before the first cycle so UI startup is not contested.</param>
+    public void Start(
+        string workspaceRoot,
+        TimeSpan interval,
+        RepoFilter? filter = null,
+        int parallel = 6,
+        bool delayBeforeFirst = true)
     {
         Stop();
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;
         _loop = Task.Run(async () =>
         {
+            if (delayBeforeFirst)
+            {
+                try
+                {
+                    await Task.Delay(interval, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+            }
+
             while (!ct.IsCancellationRequested)
             {
                 try

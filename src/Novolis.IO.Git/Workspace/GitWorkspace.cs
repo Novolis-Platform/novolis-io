@@ -170,63 +170,87 @@ public static class GitWorkspace
         return q.ToArray();
     }
 
-    /// <summary>Builds a status matrix.</summary>
+    /// <summary>Builds a status matrix (parallel git probes; safe to call off the UI thread).</summary>
     public static WorkspaceStatusMatrix GetStatusMatrix(
         string root,
         GitRepositoryService git,
         RepoFilter? filter = null,
         RepoStateStore? state = null,
-        bool includeStashCount = true)
+        bool includeStashCount = true,
+        int parallel = 8)
     {
+        return GetStatusMatrixAsync(root, git, filter, state, includeStashCount, parallel)
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    /// <summary>Async status matrix with bounded parallelism.</summary>
+    public static async Task<WorkspaceStatusMatrix> GetStatusMatrixAsync(
+        string root,
+        GitRepositoryService git,
+        RepoFilter? filter = null,
+        RepoStateStore? state = null,
+        bool includeStashCount = true,
+        int parallel = 8,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(git);
         root = Path.GetFullPath(root);
         state ??= RepoStateStore.Load(root);
         var discovered = Discover(root);
         var selected = SelectByNames(discovered, filter);
-        var rows = new List<RepoStatusRow>();
+        var degree = Math.Clamp(parallel, 1, 32);
+        var bag = new System.Collections.Concurrent.ConcurrentBag<RepoStatusRow>();
 
-        foreach (var repo in selected)
-        {
-            try
+        await Parallel.ForEachAsync(
+            selected,
+            new ParallelOptions { MaxDegreeOfParallelism = degree, CancellationToken = cancellationToken },
+            (repo, ct) =>
             {
-                var status = git.GetStatus(repo.Path);
-                if (filter?.Dirty is true && !status.Dirty)
-                    continue;
-                if (filter?.Dirty is false && status.Dirty)
-                    continue;
-                if (filter?.Behind is true && status.Behind <= 0)
-                    continue;
-                if (filter?.Ahead is true && status.Ahead <= 0)
-                    continue;
-                if (!string.IsNullOrWhiteSpace(filter?.OnBranch)
-                    && !string.Equals(status.Branch, filter.OnBranch, StringComparison.Ordinal))
-                    continue;
-
-                var stashCount = 0;
-                if (includeStashCount)
-                    stashCount = git.ListStashes(repo.Path).Count;
-
-                rows.Add(new RepoStatusRow
+                try
                 {
-                    Repo = repo,
-                    Status = status,
-                    StashCount = stashCount,
-                    LastFetchAt = state.GetLastFetch(repo.Name),
-                });
-            }
-            catch (Exception ex)
-            {
-                rows.Add(new RepoStatusRow
-                {
-                    Repo = repo,
-                    Error = ex.Message,
-                    LastFetchAt = state.GetLastFetch(repo.Name),
-                });
-            }
-        }
+                    var status = git.GetStatus(repo.Path);
+                    if (filter?.Dirty is true && !status.Dirty)
+                        return ValueTask.CompletedTask;
+                    if (filter?.Dirty is false && status.Dirty)
+                        return ValueTask.CompletedTask;
+                    if (filter?.Behind is true && status.Behind <= 0)
+                        return ValueTask.CompletedTask;
+                    if (filter?.Ahead is true && status.Ahead <= 0)
+                        return ValueTask.CompletedTask;
+                    if (!string.IsNullOrWhiteSpace(filter?.OnBranch)
+                        && !string.Equals(status.Branch, filter.OnBranch, StringComparison.Ordinal))
+                        return ValueTask.CompletedTask;
 
+                    var stashCount = 0;
+                    if (includeStashCount)
+                        stashCount = git.ListStashes(repo.Path).Count;
+
+                    bag.Add(new RepoStatusRow
+                    {
+                        Repo = repo,
+                        Status = status,
+                        StashCount = stashCount,
+                        LastFetchAt = state.GetLastFetch(repo.Name),
+                    });
+                }
+                catch (Exception ex)
+                {
+                    bag.Add(new RepoStatusRow
+                    {
+                        Repo = repo,
+                        Error = ex.Message,
+                        LastFetchAt = state.GetLastFetch(repo.Name),
+                    });
+                }
+
+                return ValueTask.CompletedTask;
+            }).ConfigureAwait(false);
+
+        var rows = bag.OrderBy(r => r.Repo.Name, StringComparer.OrdinalIgnoreCase).ToArray();
         var summary = new WorkspaceStatusSummary
         {
-            Total = rows.Count,
+            Total = rows.Length,
             Git = rows.Count(r => r.Status is not null),
             Dirty = rows.Count(r => r.Status?.Dirty == true),
             Behind = rows.Count(r => (r.Status?.Behind ?? 0) > 0),
