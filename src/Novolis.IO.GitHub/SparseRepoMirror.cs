@@ -114,7 +114,9 @@ public sealed class SparseRepoMirror
         Directory.CreateDirectory(options.WorkspaceRoot);
         var novolis = Path.Combine(options.WorkspaceRoot, ".novolis");
         Directory.CreateDirectory(novolis);
-        _statePath = Path.Combine(novolis, "mobile-mirror.json");
+        // Per-repo state so Books vs Review mode switches do not clobber each other.
+        var safeName = $"{options.Owner}-{options.Name}".Replace('/', '-');
+        _statePath = Path.Combine(novolis, $"mobile-mirror-{safeName}.json");
     }
 
     /// <summary>Creates an Octokit client for a bearer token.</summary>
@@ -173,11 +175,13 @@ public sealed class SparseRepoMirror
                     && !string.Equals(path, prefix.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                // Skip large binary assets under **/Assets/ or **/assets/
-                if (path.Contains("/assets/", StringComparison.OrdinalIgnoreCase))
+                // Skip large binary assets under **/Assets/ or **/assets/,
+                // except Review audio editions under docs/assets/audio/.
+                var isReviewAudio = IsReviewAudioPath(path);
+                if (path.Contains("/assets/", StringComparison.OrdinalIgnoreCase) && !isReviewAudio)
                     continue;
 
-                if (!IsTextish(path))
+                if (!IsTextish(path) && !isReviewAudio)
                     continue;
 
                 var blob = await _client.Git.Blob.Get(_options.Owner, _options.Name, item.Sha).ConfigureAwait(false);
@@ -342,6 +346,15 @@ public sealed class SparseRepoMirror
         var ext = Path.GetExtension(path);
         return ext is ".md" or ".markdown" or ".yaml" or ".yml" or ".json" or ".txt" or ".csv"
             or ".svg" or ".html" or ".css" or ".js" or ".ts" or ".xml" or ".toml";
+    }
+
+    /// <summary>Galactic Confederation Review narrated editions under docs/assets/audio/.</summary>
+    static bool IsReviewAudioPath(string path)
+    {
+        if (!path.Contains("/assets/audio/", StringComparison.OrdinalIgnoreCase))
+            return false;
+        var ext = Path.GetExtension(path);
+        return ext is ".mp3" or ".json" or ".wav";
     }
 
     static byte[] DecodeBlob(Blob blob)
