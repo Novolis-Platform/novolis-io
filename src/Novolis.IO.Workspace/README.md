@@ -5,6 +5,12 @@ write/delete/move helpers (Microsoft.Extensions.FileProviders has no write API o
 `IFileInfo`). It extends the typed directory-root contract from
 `Novolis.IO.Workspace.Abstractions`.
 
+## Install
+
+```powershell
+dotnet add package Novolis.IO.Workspace
+```
+
 ## Types (this repo)
 
 | Type | Role |

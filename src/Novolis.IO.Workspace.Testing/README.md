@@ -2,6 +2,12 @@
 
 In-memory **`IFileWorkspace`** for unit tests — no disk IO. Implements the same surface as `PhysicalFileWorkspace` using concurrent dictionaries.
 
+## Install
+
+```powershell
+dotnet add package Novolis.IO.Workspace.Testing
+```
+
 ## Quick start
 
 ```csharp

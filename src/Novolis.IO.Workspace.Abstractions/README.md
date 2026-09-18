@@ -2,6 +2,12 @@
 
 The fundamental typed directory-root contract for Novolis workspace-shaped resources.
 
+## Install
+
+```powershell
+dotnet add package Novolis.IO.Workspace.Abstractions
+```
+
 ```csharp
 using Novolis.IO.Workspace;
 
