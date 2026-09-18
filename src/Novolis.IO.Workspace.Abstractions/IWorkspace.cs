@@ -3,7 +3,7 @@ using System.IO.Abstractions;
 namespace Novolis.IO.Workspace;
 
 /// <summary>
-/// A typed root directory for a workspace-shaped resource.
+/// A typed directory root for a workspace-shaped resource.
 /// </summary>
 /// <remarks>
 /// This interface deliberately represents only a directory root. Structured project workspaces,
