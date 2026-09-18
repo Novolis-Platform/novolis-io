@@ -8,6 +8,8 @@ The fundamental typed directory-root contract for Novolis workspace-shaped resou
 dotnet add package Novolis.IO.Workspace.Abstractions
 ```
 
+## Quick start
+
 ```csharp
 using Novolis.IO.Workspace;
 
