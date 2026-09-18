@@ -6,4 +6,8 @@
     <RootNamespace>Novolis.IO.Git</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Novolis.IO.Workspace.Abstractions/Novolis.IO.Workspace.Abstractions.csproj" />
+    <PackageReference Include="System.IO.Abstractions" />
+  </ItemGroup>
 </Project>

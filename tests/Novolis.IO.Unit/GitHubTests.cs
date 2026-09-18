@@ -72,7 +72,7 @@ public sealed class GitHubTests
             var stateDir = Path.Combine(temp.FullName, ".novolis");
             Directory.CreateDirectory(stateDir);
             await File.WriteAllTextAsync(
-                Path.Combine(stateDir, "mobile-mirror.json"),
+                Path.Combine(stateDir, "mobile-mirror-frankhaugen-books.json"),
                 """{"branch":"main","commitSha":"abc1234deadbeef","files":{},"dirty":["content/series/demo/chapters/001.md"]}""");
 
             var result = await mirror.SaveCommitPushAsync();

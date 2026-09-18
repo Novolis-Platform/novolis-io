@@ -102,6 +102,24 @@ public sealed class RepoSelection
 /// <summary>Discovers Novolis workspace roots and status matrices.</summary>
 public static class GitWorkspace
 {
+    /// <summary>Discovers Git repository workspaces rooted beneath an I/O workspace.</summary>
+    public static MultiGitRepositoryWorkspace DiscoverRepositoryWorkspaces(
+        Novolis.IO.Workspace.IWorkspace workspace)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+
+        var fileSystem = new System.IO.Abstractions.FileSystem();
+        var repositories = Discover(workspace.Root.FullName)
+            .Where(entry => entry.IsGit)
+            .Select(entry => new GitRepositoryWorkspace(
+                fileSystem.DirectoryInfo.New(entry.Path),
+                entry.Name,
+                DetectWorktreeKind(entry.Path)))
+            .ToArray();
+
+        return new MultiGitRepositoryWorkspace(workspace.Root, repositories);
+    }
+
     /// <summary>Resolves org root from explicit path, NOVOLIS_ROOT, or walk for markers.</summary>
     public static string ResolveRoot(string? explicitRoot = null)
     {
@@ -292,4 +310,14 @@ public static class GitWorkspace
 
     static string StripPrefix(string name) =>
         name.StartsWith("novolis-", StringComparison.OrdinalIgnoreCase) ? name["novolis-".Length..] : name;
+
+    private static GitWorktreeKind DetectWorktreeKind(string repositoryRoot)
+    {
+        var gitPath = Path.Combine(repositoryRoot, ".git");
+        if (File.Exists(gitPath))
+            return GitWorktreeKind.Linked;
+        if (Directory.Exists(gitPath))
+            return GitWorktreeKind.Main;
+        return GitWorktreeKind.Unknown;
+    }
 }

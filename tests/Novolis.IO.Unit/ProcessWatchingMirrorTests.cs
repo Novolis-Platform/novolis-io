@@ -218,11 +218,11 @@ public sealed class SparseRepoMirrorExtendedTests
             var stateDir = Path.Combine(temp.FullName, ".novolis");
             Directory.CreateDirectory(stateDir);
             await File.WriteAllTextAsync(
-                Path.Combine(stateDir, "mobile-mirror.json"),
+                Path.Combine(stateDir, "mobile-mirror-o-n.json"),
                 """{"branch":"main","commitSha":"abc","files":{},"dirty":[]}""");
             await Assert.That(mirror.Branch).IsEqualTo("main");
 
-            await File.WriteAllTextAsync(Path.Combine(stateDir, "mobile-mirror.json"), "{not-json");
+            await File.WriteAllTextAsync(Path.Combine(stateDir, "mobile-mirror-o-n.json"), "{not-json");
             await Assert.That(mirror.DirtyCount).IsEqualTo(0);
         }
         finally
