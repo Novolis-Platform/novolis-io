@@ -69,6 +69,7 @@ Small **I/O and tooling** libraries for Novolis apps: git/GitHub, paths, watchin
 | Recovery | [src/Novolis.IO.Recovery/README.md](src/Novolis.IO.Recovery/README.md) |
 | Processes | [src/Novolis.IO.Processes/README.md](src/Novolis.IO.Processes/README.md) |
 | Mobile.Android | [src/Novolis.IO.Mobile.Android/README.md](src/Novolis.IO.Mobile.Android/README.md) |
+| Workspace.Abstractions | [src/Novolis.IO.Workspace.Abstractions/README.md](src/Novolis.IO.Workspace.Abstractions/README.md) |
 | Workspace | [src/Novolis.IO.Workspace/README.md](src/Novolis.IO.Workspace/README.md) |
 | Workspace.Testing | [src/Novolis.IO.Workspace.Testing/README.md](src/Novolis.IO.Workspace.Testing/README.md) |
 

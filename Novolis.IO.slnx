@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Novolis.IO.Workspace.Abstractions/Novolis.IO.Workspace.Abstractions.csproj" />
     <Project Path="src/Novolis.IO.Workspace/Novolis.IO.Workspace.csproj" />
     <Project Path="src/Novolis.IO.Workspace.Testing/Novolis.IO.Workspace.Testing.csproj" />
     <Project Path="src/Novolis.IO.Git/Novolis.IO.Git.csproj" />

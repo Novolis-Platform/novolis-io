@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Text;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Primitives;
+using MockFileSystem = System.IO.Abstractions.TestingHelpers.MockFileSystem;
+using WorkspaceDirectoryInfo = System.IO.Abstractions.IDirectoryInfo;
 
 namespace Novolis.IO.Workspace.Testing;
 
@@ -11,6 +13,7 @@ public sealed class InMemoryFileWorkspace : IFileWorkspace
 {
     private readonly ConcurrentDictionary<string, byte[]> _files = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte> _directories = new(StringComparer.OrdinalIgnoreCase);
+    private readonly MockFileSystem _fileSystem = new();
     private readonly InMemoryFileProvider _provider;
     private bool _disposed;
 
@@ -18,11 +21,13 @@ public sealed class InMemoryFileWorkspace : IFileWorkspace
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(rootPath);
         RootPath = NormalizePath(rootPath);
+        _fileSystem.AddDirectory(RootPath);
         _provider = new InMemoryFileProvider(this);
         TouchDirectory(RootPath);
     }
 
     public IFileProvider Provider => _provider;
+    public WorkspaceDirectoryInfo Root => _fileSystem.DirectoryInfo.New(RootPath);
     public string RootPath { get; }
 
     public void EnsureDirectoryExists(string directoryPath)

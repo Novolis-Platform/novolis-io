@@ -1,4 +1,5 @@
 using System.Text;
+using System.IO.Abstractions;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.FileProviders.Physical;
 
@@ -8,6 +9,7 @@ namespace Novolis.IO.Workspace;
 public sealed class PhysicalFileWorkspace : IFileWorkspace
 {
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
+    private readonly IFileSystem _fileSystem = new FileSystem();
 
     /// <summary>Existence probe without creating a workspace root (for layout discovery where <see cref="PhysicalFileWorkspace"/> construction would create directories).</summary>
     public static bool FileExistsOnDisk(string path) => File.Exists(Path.GetFullPath(path));
@@ -39,6 +41,7 @@ public sealed class PhysicalFileWorkspace : IFileWorkspace
     }
 
     public IFileProvider Provider => _provider;
+    public IDirectoryInfo Root => _fileSystem.DirectoryInfo.New(RootPath);
     public string RootPath { get; }
 
     public void EnsureDirectoryExists(string directoryPath) =>

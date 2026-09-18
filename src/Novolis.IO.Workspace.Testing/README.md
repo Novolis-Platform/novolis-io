@@ -2,8 +2,6 @@
 
 In-memory **`IFileWorkspace`** for unit tests — no disk IO. Implements the same surface as `PhysicalFileWorkspace` using concurrent dictionaries.
 
-> **Packaging:** `IsPackable=false` in **novolis-io**. Published from **novolis-storage** alongside `Novolis.IO.Workspace`.
-
 ## Quick start
 
 ```csharp

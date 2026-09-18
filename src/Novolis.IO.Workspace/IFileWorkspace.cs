@@ -1,9 +1,10 @@
 using Microsoft.Extensions.FileProviders;
+using System.IO.Abstractions;
 
 namespace Novolis.IO.Workspace;
 
 /// <summary>Process-local file access for a single root: <see cref="IFileProvider"/> for reads and explicit write/delete helpers (M.E. has no write API on <see cref="IFileInfo"/> yet).</summary>
-public interface IFileWorkspace : IDisposable
+public interface IFileWorkspace : IWorkspace, IDisposable
 {
     IFileProvider Provider { get; }
     string RootPath { get; }

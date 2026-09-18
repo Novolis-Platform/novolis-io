@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Novolis.IO.Workspace.Abstractions</PackageId>
+    <Description>Typed directory-root workspace abstraction.</Description>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>Novolis.IO.Workspace</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.IO.Abstractions" />
+  </ItemGroup>
+</Project>

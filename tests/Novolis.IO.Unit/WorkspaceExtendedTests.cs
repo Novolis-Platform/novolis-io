@@ -8,6 +8,15 @@ namespace Novolis.IO.Unit;
 public sealed class InMemoryFileWorkspaceExtendedTests
 {
     [Test]
+    public async Task Workspace_root_is_available_without_disk_access()
+    {
+        IWorkspace workspace = new InMemoryFileWorkspace(@"C:\typed-root");
+
+        await Assert.That(workspace.Root.Exists).IsTrue();
+        await Assert.That(workspace.Root.FullName).Contains("typed-root");
+    }
+
+    [Test]
     public async Task Provider_exposes_files_and_directories()
     {
         var ws = new InMemoryFileWorkspace(@"C:\mem-root");
@@ -108,6 +117,23 @@ public sealed class InMemoryFileWorkspaceExtendedTests
 
 public sealed class PhysicalFileWorkspaceExtendedTests
 {
+    [Test]
+    public async Task Workspace_root_is_a_directory_info()
+    {
+        var temp = Directory.CreateTempSubdirectory("novolis-io-root-");
+        try
+        {
+            IWorkspace workspace = new PhysicalFileWorkspace(temp.FullName);
+            await Assert.That(workspace.Root.Exists).IsTrue();
+            await Assert.That(workspace.Root.FullName).IsEqualTo(temp.FullName);
+            ((IDisposable)workspace).Dispose();
+        }
+        finally
+        {
+            temp.Delete(true);
+        }
+    }
+
     [Test]
     public async Task Read_write_bytes_and_append()
     {

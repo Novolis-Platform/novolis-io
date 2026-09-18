@@ -1,13 +1,15 @@
 # Novolis.IO.Workspace
 
-Root-scoped **file workspace** abstraction: `IFileProvider` for reads plus explicit write/delete/move helpers (Microsoft.Extensions.FileProviders has no write API on `IFileInfo`).
-
-> **Packaging:** this project is `IsPackable=false` in **novolis-io**. The NuGet package is published from **novolis-storage**. Keep sources here in sync with that publish repo.
+Root-scoped **file workspace** capability: `IFileProvider` for reads plus explicit
+write/delete/move helpers (Microsoft.Extensions.FileProviders has no write API on
+`IFileInfo`). It extends the typed directory-root contract from
+`Novolis.IO.Workspace.Abstractions`.
 
 ## Types (this repo)
 
 | Type | Role |
 |------|------|
+| `IWorkspace` | Typed `IDirectoryInfo` root from `Novolis.IO.Workspace.Abstractions` |
 | `IFileWorkspace` | Root path + provider + ensure/enumerate/read/write/delete/move |
 | `PhysicalFileWorkspace` | Disk-backed implementation; also static on-disk probes (`FileExistsOnDisk`, …) |
 | `FileWorkspaceKeys` | DI key constants (`Storage`, `JsonFileEvents`, `JsonFilesStore`) |

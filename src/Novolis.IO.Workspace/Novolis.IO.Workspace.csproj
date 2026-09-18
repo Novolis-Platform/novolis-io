@@ -1,14 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <PackageId>Novolis.IO.Workspace</PackageId>
-    <Description>Root-scoped file workspace abstraction (IFileProvider reads + explicit writes).</Description>
-    <!-- Published from novolis-storage; keep sources here only if migrating. -->
-    <IsPackable>false</IsPackable>
+    <Description>Typed directory-root workspace abstraction with explicit file I/O capabilities.</Description>
+    <IsPackable>true</IsPackable>
     <RootNamespace>Novolis.IO.Workspace</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../Novolis.IO.Workspace.Abstractions/Novolis.IO.Workspace.Abstractions.csproj" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.FileProviders.Physical" />
+    <PackageReference Include="System.IO.Abstractions" />
   </ItemGroup>
 </Project>
