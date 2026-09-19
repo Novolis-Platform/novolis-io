@@ -37,8 +37,8 @@ Manual poll loop: `PollForTokenAsync` returns `DeviceTokenResult` (`Success`, `I
 using Novolis.IO.GitHub;
 using Octokit;
 
-var client = BooksRepoMirror.CreateClient(accessToken);
-var mirror = new BooksRepoMirror(client, new BooksRepoMirrorOptions
+var client = SparseRepoMirror.CreateClient(accessToken);
+var mirror = new SparseRepoMirror(client, new SparseRepoMirrorOptions
 {
     Owner = "frankhaugen",
     Name = "books",
@@ -60,8 +60,8 @@ Mirror state is kept under `{WorkspaceRoot}/.novolis/mobile-mirror.json`.
 | `GitHubDeviceAuth` | Device code + token wait/poll |
 | `DeviceCodeResponse` | User code, verification URIs, interval, expiry |
 | `DeviceTokenResult` | Access token or pending/error |
-| `BooksRepoMirror` | Sparse pull / dirty tracking / commit+push |
-| `BooksRepoMirrorOptions` | Owner, name, workspace root, content prefix |
+| `SparseRepoMirror` | Sparse pull / dirty tracking / commit+push |
+| `SparseRepoMirrorOptions` | Owner, name, workspace root, content prefix |
 | `MirrorPullResult` / `MirrorPushResult` | Ok, message, commit SHA, file count |
 
 ## Dogfooding / apps
