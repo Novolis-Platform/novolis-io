@@ -90,11 +90,12 @@ public sealed class MobileAndroidTests
         var info = AndroidAppInstaller.ParsePackageInfo(
             "com.novolis.booksmobile",
             "package:/data/app/~~x==/com.novolis.booksmobile-y==/base.apk\n",
-            "    versionCode=1 minSdk=23 targetSdk=36\n    versionName=0.1.0\n");
+            "    versionCode=1 minSdk=23 targetSdk=36\n    versionName=0.1.0\n    signingCertificateSha256=AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99");
         await Assert.That(info).IsNotNull();
         await Assert.That(info!.IsInstalled).IsTrue();
         await Assert.That(info.VersionName).IsEqualTo("0.1.0");
         await Assert.That(info.VersionCode).IsEqualTo(1);
+        await Assert.That(info.SigningCertificateSha256).IsNotNull();
         var flags = AndroidAppInstaller.BuildInstallArgs(new ApkInstallOptions
         {
             Reinstall = true,
@@ -158,6 +159,33 @@ public sealed class MobileAndroidTests
         await Assert.That(redacted).DoesNotContain("secret-value");
         await Assert.That(redacted).Contains("[REDACTED]");
         await Assert.That(redacted).Contains("ordinary=value");
+    }
+
+    [Test]
+    public async Task OutputRedactor_RemovesDeviceIdentifiersFromSharedReports()
+    {
+        var info = new AndroidDeviceInfo
+        {
+            Serial = "phone-serial",
+            State = "device",
+            Model = "Pixel",
+            Fingerprint = "google/pixel/fingerprint",
+            HardwareSerial = "hardware-serial",
+            AndroidId = "android-id",
+            Storage = [new AndroidStorageMount("/dev/block", "1G", "500M", "500M", "50%", "/data")],
+            RawExtras = "uniqueId='secret-display' mPhysicalDisplayId=12345",
+        };
+
+        var redacted = AndroidOutputRedactor.RedactDeviceInfo(info);
+
+        await Assert.That(redacted.Serial).IsEqualTo("[REDACTED]");
+        await Assert.That(redacted.Fingerprint).IsEqualTo("[REDACTED]");
+        await Assert.That(redacted.HardwareSerial).IsEqualTo("[REDACTED]");
+        await Assert.That(redacted.AndroidId).IsEqualTo("[REDACTED]");
+        await Assert.That(redacted.Model).IsEqualTo("Pixel");
+        await Assert.That(redacted.Storage[0].MountedOn).IsEqualTo("[REDACTED]");
+        await Assert.That(redacted.RawExtras).DoesNotContain("secret-display");
+        await Assert.That(redacted.RawExtras).DoesNotContain("12345");
     }
 
     [Test]

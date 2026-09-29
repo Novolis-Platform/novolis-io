@@ -464,8 +464,9 @@ public sealed class AndroidDeviceDiagnostics : IAndroidDiagnostics
         try
         {
             var infoPath = Path.Combine(directory, "device-info.txt");
-            var info = (await _adb.GetDeviceInfoAsync(serial, cancellationToken)
-                    .ConfigureAwait(false))
+            var info = AndroidOutputRedactor.RedactDeviceInfo(
+                    await _adb.GetDeviceInfoAsync(serial, cancellationToken)
+                        .ConfigureAwait(false))
                 .FormatReport();
             await File.WriteAllTextAsync(
                     infoPath,
@@ -484,9 +485,18 @@ public sealed class AndroidDeviceDiagnostics : IAndroidDiagnostics
                         cancellationToken)
                     .ConfigureAwait(false);
                 var packagePath = Path.Combine(directory, "package.json");
+                var packagePayload = package is null
+                    ? null
+                    : new
+                    {
+                        package.PackageName,
+                        package.VersionName,
+                        package.VersionCode,
+                        package.IsInstalled,
+                    };
                 await File.WriteAllTextAsync(
                         packagePath,
-                        JsonSerializer.Serialize(package, new JsonSerializerOptions { WriteIndented = true }),
+                        JsonSerializer.Serialize(packagePayload, new JsonSerializerOptions { WriteIndented = true }),
                         Encoding.UTF8,
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -683,8 +693,71 @@ public static partial class AndroidOutputRedactor
         return SecretAssignmentRegex().Replace(text, "$1[REDACTED]");
     }
 
+    /// <summary>
+    /// Creates a device report suitable for sharing by removing transport and
+    /// hardware identifiers while preserving diagnostic facts.
+    /// </summary>
+    public static AndroidDeviceInfo RedactDeviceInfo(AndroidDeviceInfo info)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return new AndroidDeviceInfo
+        {
+            Serial = RedactIdentifier(info.Serial),
+            State = info.State,
+            Model = info.Model,
+            Manufacturer = info.Manufacturer,
+            Brand = info.Brand,
+            ProductName = info.ProductName,
+            Device = info.Device,
+            Board = info.Board,
+            Hardware = info.Hardware,
+            AndroidVersion = info.AndroidVersion,
+            SdkVersion = info.SdkVersion,
+            FirstApiLevel = info.FirstApiLevel,
+            SecurityPatch = info.SecurityPatch,
+            BuildDisplay = info.BuildDisplay,
+            BuildId = info.BuildId,
+            BuildType = info.BuildType,
+            BuildTags = info.BuildTags,
+            Fingerprint = RedactOptionalIdentifier(info.Fingerprint),
+            Bootloader = info.Bootloader,
+            Baseband = info.Baseband,
+            HardwareSerial = RedactOptionalIdentifier(info.HardwareSerial),
+            AndroidId = RedactOptionalIdentifier(info.AndroidId),
+            Abi = info.Abi,
+            AbiList = info.AbiList,
+            CpuCoreCount = info.CpuCoreCount,
+            CpuHardware = info.CpuHardware,
+            Timezone = info.Timezone,
+            UptimeSeconds = info.UptimeSeconds,
+            Battery = info.Battery,
+            Memory = info.Memory,
+            Display = info.Display,
+            Storage = info.Storage
+                .Select(storage => storage with { MountedOn = RedactIdentifier(storage.MountedOn) })
+                .ToArray(),
+            RawExtras = RedactDeviceIdentifiers(Redact(info.RawExtras)),
+        };
+    }
+
+    private static string RedactIdentifier(string value) =>
+        string.IsNullOrWhiteSpace(value) ? value : "[REDACTED]";
+
+    private static string? RedactOptionalIdentifier(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? value : "[REDACTED]";
+
+    private static string? RedactDeviceIdentifiers(string? value) =>
+        string.IsNullOrEmpty(value)
+            ? value
+            : DeviceIdentifierRegex().Replace(value, "$1[REDACTED]$3");
+
     [GeneratedRegex(
-        @"(?i)(\b(?:authorization|bearer|access[_-]?token|refresh[_-]?token|client[_-]?secret|api[_-]?key|password|secret|token)\b\s*[:=]\s*)([^\s,;""']+)",
+        @"(?i)(\b(?:uniqueId|mPhysicalDisplayId|mDisplayToken)\s*[=:]\s*['""]?)([^,'""}\s]+)(['""]?)",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex DeviceIdentifierRegex();
+
+    [GeneratedRegex(
+        @"(?i)(\b(?:authorization|access[_-]?token|refresh[_-]?token|client[_-]?secret|api[_-]?key|password|secret|token)\b\s*[:=]\s*(?:bearer\s+)?)([^\s,;""']+)",
         RegexOptions.CultureInvariant)]
     private static partial Regex SecretAssignmentRegex();
 }

@@ -90,6 +90,9 @@ var report = adb.GetDeviceInfo(serial).FormatReport();
 ```
 
 `GetDeviceInfo` gathers identity, build/OS, ABI/CPU, display, battery, memory, storage, and a short `dumpsys display` excerpt (useful on foldables).
+Before writing a report to a ticket or artifact, call
+`AndroidOutputRedactor.RedactDeviceInfo(info)`; the CLI `info` command uses
+this redacted form by default and requires `--raw` for local troubleshooting.
 
 ## Shell, files, packages
 
@@ -186,7 +189,8 @@ screen shot`, and `novolis-android diagnostics collect`.
 | Package / app | Role |
 |---------------|------|
 | [AdvancedSharpAdbClient](https://www.nuget.org/packages/AdvancedSharpAdbClient/) | ADB protocol implementation |
-| `AdbLab` (dogfooding) | UI + `--smoke` against a tethered phone |
+| `Adb` (dogfooding) | Avalonia UI + `--smoke` against a tethered phone |
+| `novolis-android` | Scriptable install, lifecycle, evidence, and diagnostics workflow |
 | `Novolis.IO.Git` | Same “thin driver” pattern for local `git` |
 | `Novolis.IO.GitHub` | OAuth + sparse mirror used by Books Mobile |
 | `IoSmoke` (dogfooding) | Paths / Recovery / Watching / Processes / Git |
