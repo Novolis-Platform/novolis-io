@@ -14,6 +14,15 @@ public static class ApkValidator
         if (string.IsNullOrWhiteSpace(apkPath))
             return ApkValidationResult.Fail("", 0, "APK path is required.");
 
+        if (!string.IsNullOrWhiteSpace(options.ExpectedPackageName)
+            && !AndroidInputValidator.IsPackageName(options.ExpectedPackageName))
+        {
+            return ApkValidationResult.Fail(
+                apkPath,
+                0,
+                $"Invalid expected package name '{options.ExpectedPackageName}'.");
+        }
+
         string full;
         try
         {
@@ -28,9 +37,24 @@ public static class ApkValidator
             return ApkValidationResult.Fail(full, 0, $"APK not found: {full}");
 
         var ext = Path.GetExtension(full);
-        if (!ext.Equals(".apk", StringComparison.OrdinalIgnoreCase)
-            && !ext.Equals(".apks", StringComparison.OrdinalIgnoreCase)
-            && !ext.Equals(".xapk", StringComparison.OrdinalIgnoreCase))
+        var artifactKind = ext.ToLowerInvariant() switch
+        {
+            ".apk" => AndroidArtifactKind.Apk,
+            ".apks" => AndroidArtifactKind.SplitSet,
+            ".xapk" => AndroidArtifactKind.Xapk,
+            _ => AndroidArtifactKind.Unknown,
+        };
+        if (artifactKind is AndroidArtifactKind.SplitSet or AndroidArtifactKind.Xapk)
+        {
+            return new ApkValidationResult(
+                false,
+                full,
+                0,
+                [$"Artifact type '{ext}' requires a split/bundle installer; only one .apk is supported."],
+                artifactKind: artifactKind);
+        }
+
+        if (artifactKind == AndroidArtifactKind.Unknown)
         {
             warnings.Add($"Unexpected extension '{ext}' (expected .apk).");
         }
@@ -75,6 +99,6 @@ public static class ApkValidator
             }
         }
 
-        return ApkValidationResult.Success(full, size, warnings);
+        return ApkValidationResult.Success(full, size, warnings, artifactKind);
     }
 }

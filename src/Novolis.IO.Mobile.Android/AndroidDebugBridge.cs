@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Text;
 using AdvancedSharpAdbClient;
 using AdvancedSharpAdbClient.Models;
-using AdvancedSharpAdbClient.Receivers;
 
 namespace Novolis.IO.Mobile.Android;
 
@@ -13,7 +12,7 @@ namespace Novolis.IO.Mobile.Android;
 /// </summary>
 public sealed class AndroidDebugBridge
 {
-    private readonly AdbClient _client;
+    private readonly IAndroidAdbBackend _backend;
     private readonly IAdbProcessRunner? _cli;
 
     /// <summary>
@@ -24,7 +23,7 @@ public sealed class AndroidDebugBridge
     {
         AdbPath = AdbLocator.Resolve(adbPath);
         EnsureServer(AdbPath);
-        _client = new AdbClient();
+        _backend = new ProtocolAndroidAdbBackend(new AdbClient());
         Transport = "protocol";
     }
 
@@ -37,8 +36,19 @@ public sealed class AndroidDebugBridge
         _cli = runner;
         AdbPath = AdbLocator.Resolve(runner.AdbPath);
         EnsureServer(AdbPath);
-        _client = new AdbClient();
+        _backend = new ProtocolAndroidAdbBackend(new AdbClient());
         Transport = "protocol";
+    }
+
+    /// <summary>
+    /// Creates a bridge over an injected backend, intended for deterministic tests
+    /// and hosts that already own adb server lifetime.
+    /// </summary>
+    public AndroidDebugBridge(IAndroidAdbBackend backend, string? adbPath = null)
+    {
+        _backend = backend ?? throw new ArgumentNullException(nameof(backend));
+        AdbPath = adbPath ?? "injected";
+        Transport = "injected";
     }
 
     /// <summary>Path to the <c>adb</c> binary used to host the server.</summary>
@@ -50,16 +60,19 @@ public sealed class AndroidDebugBridge
     /// <summary>Lists devices via the ADB protocol (<c>host:devices-l</c>).</summary>
     public IReadOnlyList<AdbDevice> ListDevices()
     {
-        return _client.GetDevices()
-            .Select(MapDevice)
-            .ToList();
+        return _backend.ListDevices();
     }
+
+    /// <summary>Lists devices asynchronously through the selected backend.</summary>
+    public Task<IReadOnlyList<AdbDevice>> ListDevicesAsync(
+        CancellationToken cancellationToken = default) =>
+        _backend.ListDevicesAsync(cancellationToken);
 
     /// <summary>Returns the connection state for <paramref name="serial"/> (or the default online device).</summary>
     public string GetState(string? serial = null)
     {
         var device = RequireDevice(serial);
-        return MapState(device.State).ToString().ToLowerInvariant() switch
+        return device.State.ToString().ToLowerInvariant() switch
         {
             "device" => "device",
             var s => s,
@@ -69,7 +82,7 @@ public sealed class AndroidDebugBridge
     /// <summary>Reads a single <c>getprop</c> value over a protocol shell session.</summary>
     public string? GetProp(string propertyName, string? serial = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(propertyName);
+        AndroidInputValidator.RequirePropertyName(propertyName);
         var result = Shell($"getprop {propertyName}", serial);
         if (!result.Ok)
             throw new InvalidOperationException($"getprop failed: {result.Diagnostic}");
@@ -80,7 +93,7 @@ public sealed class AndroidDebugBridge
     /// <summary>Reads a getprop value without throwing when empty or failing.</summary>
     public string? TryGetProp(string propertyName, string? serial = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(propertyName);
+        AndroidInputValidator.RequirePropertyName(propertyName);
         var result = Shell($"getprop {propertyName}", serial);
         if (!result.Ok)
             return null;
@@ -100,32 +113,33 @@ public sealed class AndroidDebugBridge
         string? Prop(string name) => TryGetProp(name, resolved);
 
         var batteryRaw = SoftShell(resolved, "dumpsys battery");
-        var memRaw = SoftShell(resolved, "grep -E 'MemTotal|MemAvailable|MemFree|SwapTotal|SwapFree' /proc/meminfo");
+        var memRaw = SoftShell(resolved, "cat /proc/meminfo");
         var sizeRaw = SoftShell(resolved, "wm size");
         var densRaw = SoftShell(resolved, "wm density");
         var dfRaw = SoftShell(resolved, "df -h /data /system /sdcard /storage/emulated 2>/dev/null");
         var upRaw = SoftShell(resolved, "cat /proc/uptime");
-        var cpuCountRaw = SoftShell(resolved, "grep -c ^processor /proc/cpuinfo");
-        var cpuHwRaw = SoftShell(resolved, "grep -m1 -E 'Hardware|model name|Processor' /proc/cpuinfo");
+        var cpuRaw = SoftShell(resolved, "cat /proc/cpuinfo");
+        var cpuCountRaw = CountProcessorLines(cpuRaw);
+        var cpuHwRaw = FindCpuHardwareLine(cpuRaw);
         var androidIdRaw = SoftShell(resolved, "settings get secure android_id");
-        var displayExtra = SoftShell(resolved, "dumpsys display | head -n 40");
+        var displayExtra = LimitLines(SoftShell(resolved, "dumpsys display"), 40);
 
         var extras = new StringBuilder();
         if (!string.IsNullOrWhiteSpace(displayExtra))
         {
-            extras.AppendLine("dumpsys display (head):");
+            extras.AppendLine("dumpsys display (first lines):");
             extras.AppendLine(displayExtra.TrimEnd());
         }
 
         return new AndroidDeviceInfo
         {
             Serial = resolved,
-            State = MapState(device.State) == AdbDeviceState.Device ? "device" : MapState(device.State).ToString().ToLowerInvariant(),
+            State = device.State.ToString().ToLowerInvariant(),
             Model = Prop("ro.product.model") ?? NullIfEmpty(device.Model),
             Manufacturer = Prop("ro.product.manufacturer"),
             Brand = Prop("ro.product.brand"),
             ProductName = Prop("ro.product.name") ?? NullIfEmpty(device.Product),
-            Device = Prop("ro.product.device") ?? NullIfEmpty(device.Name),
+            Device = Prop("ro.product.device") ?? NullIfEmpty(device.Device),
             Board = Prop("ro.product.board"),
             Hardware = Prop("ro.hardware"),
             AndroidVersion = Prop("ro.build.version.release"),
@@ -143,7 +157,7 @@ public sealed class AndroidDebugBridge
             AndroidId = NullIfLiteral(androidIdRaw?.Trim(), "null"),
             Abi = Prop("ro.product.cpu.abi"),
             AbiList = Prop("ro.product.cpu.abilist"),
-            CpuCoreCount = int.TryParse(cpuCountRaw?.Trim(), out var cores) ? cores : null,
+            CpuCoreCount = int.TryParse(cpuCountRaw, out var cores) ? cores : null,
             CpuHardware = NullIfLiteral(Prop("ro.soc.model"), null)
                 ?? NullIfLiteral(Prop("ro.board.platform"), null)
                 ?? ExtractCpuHardware(cpuHwRaw),
@@ -156,6 +170,12 @@ public sealed class AndroidDebugBridge
             RawExtras = extras.Length == 0 ? null : extras.ToString(),
         };
     }
+
+    /// <summary>Collects a technical snapshot without blocking the caller thread.</summary>
+    public Task<AndroidDeviceInfo> GetDeviceInfoAsync(
+        string? serial = null,
+        CancellationToken cancellationToken = default) =>
+        Task.Run(() => GetDeviceInfo(serial), cancellationToken);
 
     /// <summary>Installs an APK via the ADB protocol install service.</summary>
     public AdbOperationResult Install(string apkPath, bool reinstall = true, string? serial = null)
@@ -176,13 +196,72 @@ public sealed class AndroidDebugBridge
         try
         {
             var device = RequireDevice(serial);
-            using var stream = File.OpenRead(full);
-            _client.Install(device, stream, callback: null, installArguments);
-            return AdbOperationResult.Success("install", $"Installed {Path.GetFileName(full)}.");
+            return _backend.Install(full, device.Serial, installArguments);
+        }
+        catch (AndroidOperationException ex)
+        {
+            return AdbOperationResult.Fail(
+                "install",
+                ex.Failure.Message,
+                failureKind: ex.Failure.Kind);
         }
         catch (Exception ex)
         {
-            return AdbOperationResult.Fail("install", ex.Message);
+            return AdbOperationResult.Fail(
+                "install",
+                ex.Message,
+                failureKind: AndroidFailureKind.Transport);
+        }
+    }
+
+    /// <summary>Installs an APK asynchronously through the protocol backend.</summary>
+    public async Task<AdbOperationResult> InstallAsync(
+        string apkPath,
+        string? serial = null,
+        CancellationToken cancellationToken = default,
+        params string[] installArguments)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(apkPath);
+        ArgumentNullException.ThrowIfNull(installArguments);
+        var full = Path.GetFullPath(apkPath);
+        if (!File.Exists(full))
+        {
+            return AdbOperationResult.Fail(
+                "install",
+                $"APK not found: {full}",
+                failureKind: AndroidFailureKind.InvalidInput);
+        }
+
+        try
+        {
+            var device = RequireDevice(serial);
+            return await _backend.InstallAsync(
+                    full,
+                    device.Serial,
+                    installArguments,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (AndroidOperationException ex)
+        {
+            return AdbOperationResult.Fail(
+                "install",
+                ex.Failure.Message,
+                failureKind: ex.Failure.Kind);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return AdbOperationResult.Fail(
+                "install",
+                "APK installation cancelled.",
+                failureKind: AndroidFailureKind.Cancelled);
+        }
+        catch (Exception ex)
+        {
+            return AdbOperationResult.Fail(
+                "install",
+                ex.Message,
+                failureKind: AndroidFailureKind.Transport);
         }
     }
 
@@ -203,17 +282,20 @@ public sealed class AndroidDebugBridge
             try
             {
                 var devices = ListDevices();
-                var resolved = ResolveSerial(serial);
-                AdbDevice? match;
-                if (resolved is null)
+                var selection = AndroidDeviceSelector.Resolve(
+                    devices,
+                    new AndroidTargetOptions
+                    {
+                        Serial = serial,
+                        RequireExplicitWhenMultiple = true,
+                        RequireReady = false,
+                    });
+                AdbDevice? match = selection.Device;
+                if (!selection.Ok && selection.Failure is { } failure)
                 {
-                    match = devices.FirstOrDefault(d => d.State == AdbDeviceState.Device)
-                            ?? devices.FirstOrDefault();
-                }
-                else
-                {
-                    match = devices.FirstOrDefault(d =>
-                        string.Equals(d.Serial, resolved, StringComparison.OrdinalIgnoreCase));
+                    if (failure.Kind == AndroidFailureKind.AmbiguousDevice)
+                        throw new AndroidOperationException(failure);
+                    last = new AndroidOperationException(failure);
                 }
 
                 if (match is { State: AdbDeviceState.Device })
@@ -222,10 +304,11 @@ public sealed class AndroidDebugBridge
                 if (match is not null)
                     last = new InvalidOperationException(
                         $"Device {match.Serial} is {match.State}; waiting for Device/online.");
-                else if (resolved is not null)
-                    last = new InvalidOperationException($"Device '{resolved}' not found.");
-                else
-                    last = new InvalidOperationException("No adb devices connected.");
+            }
+            catch (AndroidOperationException ex)
+                when (ex.Failure.Kind == AndroidFailureKind.AmbiguousDevice)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -241,23 +324,85 @@ public sealed class AndroidDebugBridge
         }
     }
 
+    /// <summary>
+    /// Polls asynchronously until a device is online or the timeout/cancellation
+    /// boundary is reached.
+    /// </summary>
+    public async Task<AdbDevice> WaitForDeviceAsync(
+        TimeSpan timeout,
+        string? serial = null,
+        TimeSpan? pollInterval = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (timeout < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(timeout));
+
+        var poll = pollInterval is { } p && p > TimeSpan.Zero
+            ? p
+            : TimeSpan.FromMilliseconds(250);
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
+
+        while (true)
+        {
+            timeoutCts.Token.ThrowIfCancellationRequested();
+            var devices = await ListDevicesAsync(timeoutCts.Token).ConfigureAwait(false);
+            var selection = AndroidDeviceSelector.Resolve(
+                devices,
+                new AndroidTargetOptions
+                {
+                    Serial = serial,
+                    RequireExplicitWhenMultiple = true,
+                    RequireReady = false,
+                });
+            if (selection.Ok && selection.Device is { State: AdbDeviceState.Device } ready)
+                return ready;
+            if (selection.Failure is { Kind: AndroidFailureKind.AmbiguousDevice } failure)
+                throw new AndroidOperationException(failure);
+
+            await Task.Delay(poll, timeoutCts.Token).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>Queries whether a package is installed and reads version fields when available.</summary>
     public AndroidPackageInfo? TryGetPackageInfo(string packageName, string? serial = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(packageName);
+        AndroidInputValidator.RequirePackageName(packageName);
         var path = Shell($"pm path {packageName}", serial);
-        var dump = SoftShell(serial,
-            $"dumpsys package {packageName} | grep -E 'versionName=|versionCode=' | head -n 8");
+        var dump = SoftShell(serial, $"dumpsys package {packageName}");
         return AndroidAppInstaller.ParsePackageInfo(
             packageName,
             path.Ok ? path.StdOut : null,
             dump);
     }
 
+    /// <summary>Queries package information asynchronously.</summary>
+    public async Task<AndroidPackageInfo?> TryGetPackageInfoAsync(
+        string packageName,
+        string? serial = null,
+        CancellationToken cancellationToken = default)
+    {
+        AndroidInputValidator.RequirePackageName(packageName);
+        var path = await ShellAsync(
+                $"pm path {packageName}",
+                serial,
+                cancellationToken)
+            .ConfigureAwait(false);
+        var dump = await ShellAsync(
+                $"dumpsys package {packageName}",
+                serial,
+                cancellationToken)
+            .ConfigureAwait(false);
+        return AndroidAppInstaller.ParsePackageInfo(
+            packageName,
+            path.Ok ? path.StdOut : null,
+            dump.Ok ? dump.StdOut : null);
+    }
+
     /// <summary>Starts an app via <c>monkey</c> launcher intent (package main activity).</summary>
     public AdbOperationResult StartApp(string packageName, string? serial = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(packageName);
+        AndroidInputValidator.RequirePackageName(packageName);
         // monkey -p <pkg> -c LAUNCHER 1 is widely available without resolving the activity class.
         var result = Shell(
             $"monkey -p {packageName} -c android.intent.category.LAUNCHER 1",
@@ -267,29 +412,132 @@ public sealed class AndroidDebugBridge
         return AdbOperationResult.Success("startapp", $"Started {packageName}.", result);
     }
 
+    /// <summary>Starts an app asynchronously through its launcher intent.</summary>
+    public async Task<AdbOperationResult> StartAppAsync(
+        string packageName,
+        string? serial = null,
+        CancellationToken cancellationToken = default)
+    {
+        AndroidInputValidator.RequirePackageName(packageName);
+        var result = await ShellAsync(
+                $"monkey -p {packageName} -c android.intent.category.LAUNCHER 1",
+                serial,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (!result.Ok)
+        {
+            return AdbOperationResult.Fail(
+                "startapp",
+                result.Diagnostic,
+                result,
+                result.Cancelled
+                    ? AndroidFailureKind.Cancelled
+                    : AndroidFailureKind.CommandFailed);
+        }
+
+        return AdbOperationResult.Success(
+            "startapp",
+            $"Started {packageName}.",
+            result);
+    }
+
     /// <summary>Force-stops a package.</summary>
     public AdbOperationResult ForceStop(string packageName, string? serial = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(packageName);
+        AndroidInputValidator.RequirePackageName(packageName);
         var result = Shell($"am force-stop {packageName}", serial);
         if (!result.Ok)
             return AdbOperationResult.Fail("forcestop", result.Diagnostic, result);
         return AdbOperationResult.Success("forcestop", $"Force-stopped {packageName}.", result);
     }
 
+    /// <summary>Force-stops a package asynchronously.</summary>
+    public async Task<AdbOperationResult> ForceStopAsync(
+        string packageName,
+        string? serial = null,
+        CancellationToken cancellationToken = default)
+    {
+        AndroidInputValidator.RequirePackageName(packageName);
+        var result = await ShellAsync(
+                $"am force-stop {packageName}",
+                serial,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (!result.Ok)
+        {
+            return AdbOperationResult.Fail(
+                "forcestop",
+                result.Diagnostic,
+                result,
+                result.Cancelled
+                    ? AndroidFailureKind.Cancelled
+                    : AndroidFailureKind.CommandFailed);
+        }
+
+        return AdbOperationResult.Success(
+            "forcestop",
+            $"Force-stopped {packageName}.",
+            result);
+    }
+
     /// <summary>Uninstalls a package via the ADB protocol.</summary>
     public AdbOperationResult Uninstall(string packageName, string? serial = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(packageName);
+        AndroidInputValidator.RequirePackageName(packageName);
         try
         {
             var device = RequireDevice(serial);
-            _client.Uninstall(device, packageName);
-            return AdbOperationResult.Success("uninstall", $"Uninstalled {packageName}.");
+            return _backend.Uninstall(packageName, device.Serial);
+        }
+        catch (AndroidOperationException ex)
+        {
+            return AdbOperationResult.Fail(
+                "uninstall",
+                ex.Failure.Message,
+                failureKind: ex.Failure.Kind);
         }
         catch (Exception ex)
         {
-            return AdbOperationResult.Fail("uninstall", ex.Message);
+            return AdbOperationResult.Fail(
+                "uninstall",
+                ex.Message,
+                failureKind: AndroidFailureKind.Transport);
+        }
+    }
+
+    /// <summary>Uninstalls a package asynchronously.</summary>
+    public async Task<AdbOperationResult> UninstallAsync(
+        string packageName,
+        string? serial = null,
+        CancellationToken cancellationToken = default)
+    {
+        AndroidInputValidator.RequirePackageName(packageName);
+        try
+        {
+            var device = RequireDevice(serial);
+            return await _backend.UninstallAsync(packageName, device.Serial, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (AndroidOperationException ex)
+        {
+            return AdbOperationResult.Fail(
+                "uninstall",
+                ex.Failure.Message,
+                failureKind: ex.Failure.Kind);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return AdbOperationResult.Fail(
+                "uninstall",
+                "Package uninstall cancelled.",
+                failureKind: AndroidFailureKind.Cancelled);
+        }
+        catch (Exception ex)
+        {
+            return AdbOperationResult.Fail(
+                "uninstall",
+                ex.Message,
+                failureKind: AndroidFailureKind.Transport);
         }
     }
 
@@ -305,14 +553,63 @@ public sealed class AndroidDebugBridge
         try
         {
             var device = RequireDevice(serial);
-            using var sync = new SyncService(_client, device);
-            using var stream = File.OpenRead(full);
-            sync.Push(stream, remotePath, UnixFileStatus.DefaultFileMode, DateTimeOffset.Now, null);
-            return AdbOperationResult.Success("push", $"Pushed → {remotePath}");
+            return _backend.Push(full, remotePath, device.Serial);
+        }
+        catch (AndroidOperationException ex)
+        {
+            return AdbOperationResult.Fail(
+                "push",
+                ex.Failure.Message,
+                failureKind: ex.Failure.Kind);
         }
         catch (Exception ex)
         {
-            return AdbOperationResult.Fail("push", ex.Message);
+            return AdbOperationResult.Fail(
+                "push",
+                ex.Message,
+                failureKind: AndroidFailureKind.Transport);
+        }
+    }
+
+    /// <summary>Pushes a local file asynchronously.</summary>
+    public async Task<AdbOperationResult> PushAsync(
+        string localPath,
+        string remotePath,
+        string? serial = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(localPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(remotePath);
+        var full = Path.GetFullPath(localPath);
+        if (!File.Exists(full))
+            return AdbOperationResult.Fail("push", $"Local file not found: {full}", failureKind: AndroidFailureKind.InvalidInput);
+
+        try
+        {
+            var device = RequireDevice(serial);
+            return await _backend.PushAsync(full, remotePath, device.Serial, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (AndroidOperationException ex)
+        {
+            return AdbOperationResult.Fail(
+                "push",
+                ex.Failure.Message,
+                failureKind: ex.Failure.Kind);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return AdbOperationResult.Fail(
+                "push",
+                "File push cancelled.",
+                failureKind: AndroidFailureKind.Cancelled);
+        }
+        catch (Exception ex)
+        {
+            return AdbOperationResult.Fail(
+                "push",
+                ex.Message,
+                failureKind: AndroidFailureKind.Transport);
         }
     }
 
@@ -326,18 +623,61 @@ public sealed class AndroidDebugBridge
         try
         {
             var device = RequireDevice(serial);
-            var dir = Path.GetDirectoryName(full);
-            if (!string.IsNullOrWhiteSpace(dir))
-                Directory.CreateDirectory(dir);
-
-            using var sync = new SyncService(_client, device);
-            using var stream = File.Create(full);
-            sync.Pull(remotePath, stream, null);
-            return AdbOperationResult.Success("pull", $"Pulled → {full}");
+            return _backend.Pull(remotePath, full, device.Serial);
+        }
+        catch (AndroidOperationException ex)
+        {
+            return AdbOperationResult.Fail(
+                "pull",
+                ex.Failure.Message,
+                failureKind: ex.Failure.Kind);
         }
         catch (Exception ex)
         {
-            return AdbOperationResult.Fail("pull", ex.Message);
+            return AdbOperationResult.Fail(
+                "pull",
+                ex.Message,
+                failureKind: AndroidFailureKind.Transport);
+        }
+    }
+
+    /// <summary>Pulls a remote file asynchronously.</summary>
+    public async Task<AdbOperationResult> PullAsync(
+        string remotePath,
+        string localPath,
+        string? serial = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(remotePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(localPath);
+        var full = Path.GetFullPath(localPath);
+
+        try
+        {
+            var device = RequireDevice(serial);
+            return await _backend.PullAsync(remotePath, full, device.Serial, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (AndroidOperationException ex)
+        {
+            return AdbOperationResult.Fail(
+                "pull",
+                ex.Failure.Message,
+                failureKind: ex.Failure.Kind);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return AdbOperationResult.Fail(
+                "pull",
+                "File pull cancelled.",
+                failureKind: AndroidFailureKind.Cancelled);
+        }
+        catch (Exception ex)
+        {
+            return AdbOperationResult.Fail(
+                "pull",
+                ex.Message,
+                failureKind: AndroidFailureKind.Transport);
         }
     }
 
@@ -348,9 +688,44 @@ public sealed class AndroidDebugBridge
         try
         {
             var device = RequireDevice(serial);
-            var receiver = new ConsoleOutputReceiver();
-            _client.ExecuteRemoteCommand(command, device, receiver, Encoding.UTF8);
-            return new AdbProcessResult(0, receiver.ToString() ?? "", "");
+            return _backend.Shell(command, device.Serial);
+        }
+        catch (AndroidOperationException ex)
+        {
+            return new AdbProcessResult(1, "", ex.Failure.Message);
+        }
+        catch (Exception ex)
+        {
+            return new AdbProcessResult(1, "", ex.Message);
+        }
+    }
+
+    /// <summary>Runs a remote shell command asynchronously.</summary>
+    public async Task<AdbProcessResult> ShellAsync(
+        string command,
+        string? serial = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+        try
+        {
+            var device = RequireDevice(serial);
+            return await _backend.ShellAsync(command, device.Serial, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (AndroidOperationException ex)
+        {
+            return new AdbProcessResult(1, "", ex.Failure.Message)
+            {
+                Cancelled = ex.Failure.Kind == AndroidFailureKind.Cancelled,
+            };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new AdbProcessResult(1, "", "ADB shell operation cancelled.")
+            {
+                Cancelled = true,
+            };
         }
         catch (Exception ex)
         {
@@ -367,7 +742,7 @@ public sealed class AndroidDebugBridge
         ArgumentNullException.ThrowIfNull(args);
         var runner = _cli ?? new ProcessAdbRunner(AdbPath);
         var list = new List<string>(args.Length + 2);
-        var resolved = ResolveSerial(serial);
+        var resolved = AndroidDeviceSelector.ResolveSerial(serial);
         if (resolved is not null)
         {
             list.Add("-s");
@@ -384,36 +759,14 @@ public sealed class AndroidDebugBridge
         return string.IsNullOrWhiteSpace(result.StdOut) ? null : result.StdOut;
     }
 
-    private DeviceData RequireDevice(string? serial)
+    private AdbDevice RequireDevice(string? serial)
     {
-        var devices = _client.GetDevices().ToList();
-        if (devices.Count == 0)
-            throw new InvalidOperationException("No adb devices connected.");
-
-        var resolved = ResolveSerial(serial);
-        DeviceData? device;
-        if (resolved is null)
-        {
-            device = devices.FirstOrDefault(d => d.State == DeviceState.Online)
-                     ?? devices[0];
-        }
-        else
-        {
-            device = devices.FirstOrDefault(d =>
-                string.Equals(d.Serial, resolved, StringComparison.OrdinalIgnoreCase));
-            if (device is null)
-                throw new InvalidOperationException($"Device '{resolved}' not found.");
-        }
-
-        return device;
-    }
-
-    private static string? ResolveSerial(string? serial)
-    {
-        if (!string.IsNullOrWhiteSpace(serial))
-            return serial.Trim();
-        var env = Environment.GetEnvironmentVariable("ANDROID_SERIAL");
-        return string.IsNullOrWhiteSpace(env) ? null : env.Trim();
+        var selection = AndroidDeviceSelector.Resolve(
+            ListDevices(),
+            new AndroidTargetOptions { Serial = serial });
+        if (selection.Ok && selection.Device is { } device)
+            return device;
+        throw new AndroidOperationException(selection.Failure!);
     }
 
     private static void EnsureServer(string adbPath)
@@ -461,28 +814,6 @@ public sealed class AndroidDebugBridge
         throw new InvalidOperationException(
             $"Failed to start adb server from '{adbPath}' (result={result}).");
     }
-
-    private static AdbDevice MapDevice(DeviceData d) =>
-        new(
-            d.Serial ?? "",
-            MapState(d.State),
-            NullIfEmpty(d.Product),
-            NullIfEmpty(d.Model),
-            NullIfEmpty(d.Name),
-            NullIfEmpty(d.TransportId));
-
-    private static AdbDeviceState MapState(DeviceState state) =>
-        state switch
-        {
-            DeviceState.Online => AdbDeviceState.Device,
-            DeviceState.Unauthorized => AdbDeviceState.Unauthorized,
-            DeviceState.Offline => AdbDeviceState.Offline,
-            DeviceState.NoPermissions => AdbDeviceState.NoPermissions,
-            DeviceState.BootLoader => AdbDeviceState.Bootloader,
-            DeviceState.Recovery => AdbDeviceState.Recovery,
-            DeviceState.Sideload => AdbDeviceState.Sideload,
-            _ => AdbDeviceState.Unknown,
-        };
 
     /// <summary>Parses classic <c>adb devices -l</c> stdout (unit tests / CLI fallback).</summary>
     public static IReadOnlyList<AdbDevice> ParseDevices(string stdout)
@@ -692,6 +1023,40 @@ public sealed class AndroidDebugBridge
         if (literal is not null && string.Equals(value, literal, StringComparison.OrdinalIgnoreCase))
             return null;
         return value;
+    }
+
+    private static string? CountProcessorLines(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+
+        var count = raw
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Count(line => line.StartsWith("processor", StringComparison.OrdinalIgnoreCase));
+        return count == 0 ? null : count.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static string? FindCpuHardwareLine(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+
+        return raw
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault(line =>
+                line.StartsWith("Hardware:", StringComparison.OrdinalIgnoreCase)
+                || line.StartsWith("model name:", StringComparison.OrdinalIgnoreCase)
+                || line.StartsWith("Processor:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? LimitLines(string? raw, int maxLines)
+    {
+        if (string.IsNullOrWhiteSpace(raw) || maxLines <= 0)
+            return raw;
+
+        return string.Join(
+            Environment.NewLine,
+            raw.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Take(maxLines));
     }
 
     private static string? ExtractCpuHardware(string? cpuinfoLine)

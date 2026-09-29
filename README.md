@@ -73,10 +73,11 @@ Small **I/O and tooling** libraries for Novolis apps: git/GitHub, paths, watchin
 | Workspace | [src/Novolis.IO.Workspace/README.md](src/Novolis.IO.Workspace/README.md) |
 | Workspace.Testing | [src/Novolis.IO.Workspace.Testing/README.md](src/Novolis.IO.Workspace.Testing/README.md) |
 
-## Dogfooding
+## Android dogfooding
 
 | App | Repo | Covers |
 |-----|------|--------|
 | `IoSmoke` | novolis-dogfooding | Paths, Recovery, Watching, Processes, Git |
-| `AdbLab` | novolis-dogfooding | Mobile.Android (protocol, stats, install helpers) |
+| `Adb` | novolis-utilities | Mobile.Android protocol, stats, install, logcat, screenshot, and UI evidence |
+| `novolis-android` | novolis-tools | Scriptable deployment and diagnostics command |
 

@@ -10,11 +10,36 @@ namespace Novolis.IO.Mobile.Android;
 public sealed record AdbProcessResult(int ExitCode, string StdOut, string StdErr)
 {
     /// <summary>Whether <see cref="ExitCode"/> is zero.</summary>
-    public bool Ok => ExitCode == 0;
+    public bool Ok => ExitCode == 0 && !TimedOut && !Cancelled;
+
+    /// <summary>Whether the process exceeded its timeout.</summary>
+    public bool TimedOut { get; init; }
+
+    /// <summary>Whether the caller cancelled the process.</summary>
+    public bool Cancelled { get; init; }
+
+    /// <summary>Whether captured output was truncated.</summary>
+    public bool Truncated { get; init; }
 
     /// <summary>Combined diagnostic text (stderr preferred when non-empty).</summary>
     public string Diagnostic =>
         string.IsNullOrWhiteSpace(StdErr) ? StdOut.Trim() : StdErr.Trim();
+}
+
+/// <summary>Result of a process whose standard output may contain binary data.</summary>
+public sealed record AdbBinaryProcessResult(int ExitCode, byte[] StdOut, string StdErr)
+{
+    /// <summary>Whether the process completed successfully.</summary>
+    public bool Ok => ExitCode == 0 && !TimedOut && !Cancelled;
+
+    /// <summary>Whether the process exceeded its timeout.</summary>
+    public bool TimedOut { get; init; }
+
+    /// <summary>Whether the caller cancelled the process.</summary>
+    public bool Cancelled { get; init; }
+
+    /// <summary>Combined diagnostic text.</summary>
+    public string Diagnostic => string.IsNullOrWhiteSpace(StdErr) ? "" : StdErr.Trim();
 }
 
 /// <summary>Locates a real <c>adb</c> executable used to host the ADB server daemon.</summary>
@@ -114,6 +139,36 @@ public interface IAdbProcessRunner
 
     /// <summary>Executes <c>adb</c> with <paramref name="args"/>.</summary>
     AdbProcessResult Run(params string[] args);
+
+    /// <summary>
+    /// Executes <c>adb</c> asynchronously with a cancellation and timeout boundary.
+    /// Existing implementations receive a safe compatibility implementation.
+    /// </summary>
+    Task<AdbProcessResult> RunAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default,
+        params string[] args) =>
+        Task.Run(() => Run(args), cancellationToken).WaitAsync(timeout, cancellationToken);
+
+    /// <summary>
+    /// Executes <c>adb</c> while preserving binary standard output.
+    /// Existing implementations receive a UTF-8 compatibility implementation.
+    /// </summary>
+    async Task<AdbBinaryProcessResult> RunBinaryAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default,
+        params string[] args)
+    {
+        var result = await RunAsync(timeout, cancellationToken, args).ConfigureAwait(false);
+        return new AdbBinaryProcessResult(
+            result.ExitCode,
+            Encoding.UTF8.GetBytes(result.StdOut),
+            result.StdErr)
+        {
+            TimedOut = result.TimedOut,
+            Cancelled = result.Cancelled,
+        };
+    }
 }
 
 /// <summary>Default <see cref="IAdbProcessRunner"/> (CLI escape hatch).</summary>
@@ -151,5 +206,116 @@ public sealed class ProcessAdbRunner : IAdbProcessRunner
         var stderr = process.StandardError.ReadToEnd();
         process.WaitForExit();
         return new AdbProcessResult(process.ExitCode, stdout, stderr);
+    }
+
+    /// <inheritdoc />
+    public async Task<AdbProcessResult> RunAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default,
+        params string[] args)
+    {
+        if (timeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(timeout));
+        ArgumentNullException.ThrowIfNull(args);
+
+        using var process = Start(args);
+        try
+        {
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken).WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+            var stdout = await stdoutTask.ConfigureAwait(false);
+            var stderr = await stderrTask.ConfigureAwait(false);
+            return new AdbProcessResult(process.ExitCode, stdout, stderr);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            TryKill(process);
+            return new AdbProcessResult(1, "", "adb operation cancelled.")
+            {
+                Cancelled = true,
+            };
+        }
+        catch (TimeoutException)
+        {
+            TryKill(process);
+            return new AdbProcessResult(1, "", $"adb operation timed out after {timeout}.")
+            {
+                TimedOut = true,
+            };
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<AdbBinaryProcessResult> RunBinaryAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default,
+        params string[] args)
+    {
+        if (timeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(timeout));
+        ArgumentNullException.ThrowIfNull(args);
+
+        using var process = Start(args);
+        using var output = new MemoryStream();
+        try
+        {
+            var copyTask = process.StandardOutput.BaseStream.CopyToAsync(output, cancellationToken);
+            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken).WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+            await copyTask.ConfigureAwait(false);
+            var stderr = await stderrTask.ConfigureAwait(false);
+            return new AdbBinaryProcessResult(process.ExitCode, output.ToArray(), stderr);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            TryKill(process);
+            return new AdbBinaryProcessResult(1, [], "adb operation cancelled.")
+            {
+                Cancelled = true,
+            };
+        }
+        catch (TimeoutException)
+        {
+            TryKill(process);
+            return new AdbBinaryProcessResult(1, [], $"adb operation timed out after {timeout}.")
+            {
+                TimedOut = true,
+            };
+        }
+    }
+
+    private Process Start(string[] args)
+    {
+        if (!File.Exists(AdbPath))
+            throw new FileNotFoundException($"adb executable not found: {AdbPath}", AdbPath);
+
+        var psi = new ProcessStartInfo(AdbPath)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+        };
+        foreach (var arg in args)
+            psi.ArgumentList.Add(arg);
+
+        return Process.Start(psi)
+            ?? throw new InvalidOperationException($"Could not start adb at '{AdbPath}'.");
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // The process may have exited between HasExited and Kill.
+        }
     }
 }

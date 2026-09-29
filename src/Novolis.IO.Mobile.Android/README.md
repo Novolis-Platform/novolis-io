@@ -10,11 +10,11 @@
 
 Host-side Android Debug Bridge helpers for Novolis apps and dogfood tools.
 
-Device work uses the **ADB wire protocol** via [AdvancedSharpAdbClient](https://www.nuget.org/packages/AdvancedSharpAdbClient/) (devices, shell, sync, install). The Android SDK `adb` / `adb.exe` binary is only required to **locate and ensure the local adb server** — not scraped as a CLI for each call.
+Device work uses the **ADB wire protocol** via [AdvancedSharpAdbClient](https://www.nuget.org/packages/AdvancedSharpAdbClient/) (devices, shell, sync, install). The Android SDK `adb` / `adb.exe` binary is only required to **locate and ensure the local adb server**. A small, windowless CLI escape hatch is used for ADB-only verbs such as `screencap`, `logcat`, UIAutomator capture, and port forwarding.
 
 This is **not** an on-device `net10.0-android` / MAUI package.
 
-**Coverage:** this assembly is excluded from org line-coverage via `[assembly: ExcludeFromCodeCoverage]` (see `novolis-governance/docs/coverage-report.md`). Unit tests in `Novolis.IO.Unit` still exercise parsing/helpers; live ADB/device paths are validated in dogfood (`AdbLab`).
+**Coverage:** this assembly is excluded from org line-coverage via `[assembly: ExcludeFromCodeCoverage]` (see `novolis-governance/docs/coverage-report.md`). Unit tests in `Novolis.IO.Unit` exercise parsers, target selection, redaction, and artifact validation; live ADB/device paths are validated by the `Adb` utility and `novolis-android`.
 
 ## Install
 
@@ -47,6 +47,19 @@ var info = adb.GetDeviceInfo();
 Console.WriteLine(info.FormatReport()); // identity, build, CPU, display, battery, RAM, storage
 ```
 
+For cancellable host workflows:
+
+```csharp
+var ready = await adb.WaitForDeviceAsync(
+    TimeSpan.FromSeconds(30),
+    serial: null,
+    cancellationToken: cancellationToken);
+var logs = new AndroidDeviceDiagnostics(adb);
+var capture = await logs.CaptureLogcatAsync(
+    new AndroidLogcatOptions { Serial = ready.Serial, PackageName = "com.example.app" },
+    cancellationToken);
+```
+
 ## Architecture
 
 ```text
@@ -60,10 +73,11 @@ Your app ──► AndroidDebugBridge (Novolis façade)
 
 | Piece | Role |
 |-------|------|
-| `AndroidDebugBridge` | Primary API: devices, props/stats, shell, sync, install/uninstall, start/stop |
+| `AndroidDebugBridge` | Primary API: deterministic target selection, devices, props/stats, shell, sync, install/uninstall, start/stop |
 | `AdbLocator` | Resolves `adb` with `File.Exists` |
-| `ProcessAdbRunner` | Rare **CLI escape hatch** for `Run(...)` only |
+| `ProcessAdbRunner` | Rare **CLI escape hatch** for binary, async, and ADB-only verbs |
 | `ApkValidator` / `AndroidAppInstaller` | Validate APK → wait for device → install → verify / launch |
+| `AndroidDeviceDiagnostics` | Logcat, screenshot, UI XML, input, forwarding, and redacted bundles |
 
 ## Device & stats
 
@@ -91,6 +105,11 @@ adb.StartApp("com.example.app", serial);   // monkey launcher intent
 adb.ForceStop("com.example.app", serial);
 adb.Uninstall("com.example.app", serial);
 ```
+
+When more than one ready device is attached, omit no target: pass an explicit
+serial or set `ANDROID_SERIAL`. The library returns an
+`AndroidFailureKind.AmbiguousDevice` failure instead of selecting the first
+phone.
 
 ## Installing an APK
 
@@ -130,7 +149,9 @@ if (result.Package is { } p)
 | Readable zip with `AndroidManifest.xml` | `RequireApkEntries = true` |
 | `classes*.dex` | warning if missing |
 
-`VerifyInstalled` only runs when `ExpectedPackageName` is set.
+`VerifyInstalled` only runs when `ExpectedPackageName` is set. The installer
+accepts one `.apk`; `.apks` and `.xapk` are reported as unsupported bundle
+artifacts rather than being passed to the single-APK path.
 
 ### Low-level install
 
@@ -139,23 +160,26 @@ adb.Install(apkPath, reinstall: true, serial);
 adb.Install(apkPath, serial, "-r", "-g"); // explicit flags
 ```
 
-## Dogfooding
+## Diagnostics and dogfooding
 
-Avalonia lab + headless smoke:
+The reusable diagnostics surface can capture evidence without a UI:
 
 ```powershell
-dotnet run --project ../novolis-dogfooding/apps/io/AdbLab -p:NovolisUseProjectReferences=true
-dotnet run --project ../novolis-dogfooding/apps/io/AdbLab -p:NovolisUseProjectReferences=true -- --smoke
+dotnet run --project d:\novolis\novolis-utilities\src\Adb\Adb.csproj -p:NovolisUseProjectReferences=true
+dotnet run --project d:\novolis\novolis-utilities\src\Adb\Adb.csproj -p:NovolisUseProjectReferences=true -- --smoke --serial R58M12ABCDE
 ```
 
-See `novolis-dogfooding/apps/io/AdbLab/README.md`.
+For a repeatable developer command, install the PackAsTool
+`Novolis.Tools.Android.Cli` and use `novolis-android doctor`,
+`novolis-android app install`, `novolis-android logcat`, `novolis-android
+screen shot`, and `novolis-android diagnostics collect`.
 
 ## Non-goals
 
-- Android SDK / emulator / AVD management  
-- Live logcat UI or scrcpy  
+- Android SDK / emulator / AVD lifecycle management  
+- scrcpy or a full remote-screen viewer  
 - On-device Xamarin / MAUI bindings  
-- Full UIAutomator / Appium stacks  
+- Full Appium test orchestration  
 
 ## Related
 

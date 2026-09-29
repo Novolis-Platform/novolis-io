@@ -376,12 +376,18 @@ public sealed class AndroidDeviceInfo
 public sealed class AdbOperationResult
 {
     /// <summary>Creates a result.</summary>
-    public AdbOperationResult(bool ok, string command, string message, AdbProcessResult? process = null)
+    public AdbOperationResult(
+        bool ok,
+        string command,
+        string message,
+        AdbProcessResult? process = null,
+        AndroidFailureKind failureKind = AndroidFailureKind.Unknown)
     {
         Ok = ok;
         Command = command;
         Message = message;
         Process = process;
+        FailureKind = failureKind;
     }
 
     /// <summary>Whether the operation succeeded.</summary>
@@ -396,11 +402,18 @@ public sealed class AdbOperationResult
     /// <summary>Underlying process capture, when applicable.</summary>
     public AdbProcessResult? Process { get; }
 
+    /// <summary>Stable failure category when <see cref="Ok"/> is false.</summary>
+    public AndroidFailureKind FailureKind { get; }
+
     /// <summary>Success factory.</summary>
     public static AdbOperationResult Success(string command, string message, AdbProcessResult? process = null) =>
         new(true, command, message, process);
 
     /// <summary>Failure factory.</summary>
-    public static AdbOperationResult Fail(string command, string message, AdbProcessResult? process = null) =>
-        new(false, command, message, process);
+    public static AdbOperationResult Fail(
+        string command,
+        string message,
+        AdbProcessResult? process = null,
+        AndroidFailureKind failureKind = AndroidFailureKind.Unknown) =>
+        new(false, command, message, process, failureKind);
 }

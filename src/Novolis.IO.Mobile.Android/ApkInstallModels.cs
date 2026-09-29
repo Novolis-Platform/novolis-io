@@ -1,5 +1,21 @@
 namespace Novolis.IO.Mobile.Android;
 
+/// <summary>Local Android artifact categories understood by the installer.</summary>
+public enum AndroidArtifactKind
+{
+    /// <summary>One installable APK.</summary>
+    Apk,
+
+    /// <summary>A split APK archive such as .apks.</summary>
+    SplitSet,
+
+    /// <summary>An XAPK bundle requiring an external bundle installer.</summary>
+    Xapk,
+
+    /// <summary>An unrecognized file extension.</summary>
+    Unknown,
+}
+
 /// <summary>Options for validating and installing an APK.</summary>
 public sealed class ApkInstallOptions
 {
@@ -17,6 +33,12 @@ public sealed class ApkInstallOptions
 
     /// <summary>When set, post-install verification requires this package id.</summary>
     public string? ExpectedPackageName { get; init; }
+
+    /// <summary>
+    /// Optional normalized SHA-256 signing certificate digest expected after install.
+    /// Hex and colon-separated hex are accepted.
+    /// </summary>
+    public string? ExpectedSigningCertificateSha256 { get; init; }
 
     /// <summary>After install, confirm the package is present when <see cref="ExpectedPackageName"/> is set.</summary>
     public bool VerifyInstalled { get; init; } = true;
@@ -41,13 +63,20 @@ public sealed class ApkInstallOptions
 public sealed class ApkValidationResult
 {
     /// <summary>Creates a validation result.</summary>
-    public ApkValidationResult(bool ok, string apkPath, long sizeBytes, IReadOnlyList<string> errors, IReadOnlyList<string>? warnings = null)
+    public ApkValidationResult(
+        bool ok,
+        string apkPath,
+        long sizeBytes,
+        IReadOnlyList<string> errors,
+        IReadOnlyList<string>? warnings = null,
+        AndroidArtifactKind artifactKind = AndroidArtifactKind.Unknown)
     {
         Ok = ok;
         ApkPath = apkPath;
         SizeBytes = sizeBytes;
         Errors = errors;
         Warnings = warnings ?? [];
+        ArtifactKind = artifactKind;
     }
 
     /// <summary>Whether validation passed.</summary>
@@ -65,13 +94,23 @@ public sealed class ApkValidationResult
     /// <summary>Non-blocking notes.</summary>
     public IReadOnlyList<string> Warnings { get; }
 
+    /// <summary>Detected local artifact kind.</summary>
+    public AndroidArtifactKind ArtifactKind { get; }
+
     /// <summary>Success factory.</summary>
-    public static ApkValidationResult Success(string apkPath, long sizeBytes, IReadOnlyList<string>? warnings = null) =>
-        new(true, apkPath, sizeBytes, [], warnings);
+    public static ApkValidationResult Success(
+        string apkPath,
+        long sizeBytes,
+        IReadOnlyList<string>? warnings = null,
+        AndroidArtifactKind artifactKind = AndroidArtifactKind.Apk) =>
+        new(true, apkPath, sizeBytes, [], warnings, artifactKind);
 
     /// <summary>Failure factory.</summary>
-    public static ApkValidationResult Fail(string apkPath, long sizeBytes, params string[] errors) =>
-        new(false, apkPath, sizeBytes, errors);
+    public static ApkValidationResult Fail(
+        string apkPath,
+        long sizeBytes,
+        params string[] errors) =>
+        new(false, apkPath, sizeBytes, errors, artifactKind: AndroidArtifactKind.Unknown);
 }
 
 /// <summary>Installed package snapshot from the device.</summary>
@@ -89,8 +128,14 @@ public sealed class AndroidPackageInfo
     /// <summary><c>versionCode</c> when available.</summary>
     public int? VersionCode { get; init; }
 
-    /// <summary>Whether an APK path was reported.</summary>
-    public bool IsInstalled => !string.IsNullOrWhiteSpace(ApkPath);
+    /// <summary>Signing certificate SHA-256 digest when package-manager output exposes it.</summary>
+    public string? SigningCertificateSha256 { get; init; }
+
+    /// <summary>Whether package-manager output confirms the package exists.</summary>
+    public bool IsInstalled =>
+        !string.IsNullOrWhiteSpace(ApkPath)
+        || !string.IsNullOrWhiteSpace(VersionName)
+        || VersionCode is not null;
 }
 
 /// <summary>Outcome of <see cref="AndroidAppInstaller.Install"/>.</summary>
@@ -104,7 +149,8 @@ public sealed class ApkInstallResult
         string? serial = null,
         AndroidPackageInfo? package = null,
         ApkValidationResult? validation = null,
-        AdbOperationResult? install = null)
+        AdbOperationResult? install = null,
+        AndroidFailureKind failureKind = AndroidFailureKind.Unknown)
     {
         Ok = ok;
         Message = message;
@@ -113,6 +159,7 @@ public sealed class ApkInstallResult
         Package = package;
         Validation = validation;
         Install = install;
+        FailureKind = failureKind;
     }
 
     /// <summary>Whether the workflow succeeded.</summary>
@@ -135,4 +182,7 @@ public sealed class ApkInstallResult
 
     /// <summary>Underlying protocol install result.</summary>
     public AdbOperationResult? Install { get; }
+
+    /// <summary>Stable failure category when the workflow fails.</summary>
+    public AndroidFailureKind FailureKind { get; }
 }

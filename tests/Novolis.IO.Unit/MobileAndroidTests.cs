@@ -105,4 +105,82 @@ public sealed class MobileAndroidTests
         await Assert.That(flags).Contains("-g");
         await Assert.That(flags).Contains("-d");
     }
+
+    [Test]
+    public async Task DeviceSelector_RejectsAmbiguousReadyDevices()
+    {
+        var devices = new[]
+        {
+            new AdbDevice("phone-a", AdbDeviceState.Device, Model: "A"),
+            new AdbDevice("phone-b", AdbDeviceState.Device, Model: "B"),
+        };
+
+        var result = AndroidDeviceSelector.Resolve(devices);
+
+        await Assert.That(result.Ok).IsFalse();
+        await Assert.That(result.Failure).IsNotNull();
+        await Assert.That(result.Failure!.Kind).IsEqualTo(AndroidFailureKind.AmbiguousDevice);
+    }
+
+    [Test]
+    public async Task DeviceSelector_UsesExplicitSerialAndReportsUnauthorized()
+    {
+        var devices = new[]
+        {
+            new AdbDevice("phone-a", AdbDeviceState.Unauthorized),
+            new AdbDevice("phone-b", AdbDeviceState.Device),
+        };
+
+        var result = AndroidDeviceSelector.Resolve(
+            devices,
+            new AndroidTargetOptions { Serial = "phone-a" });
+
+        await Assert.That(result.Ok).IsFalse();
+        await Assert.That(result.Failure!.Kind).IsEqualTo(AndroidFailureKind.Unauthorized);
+    }
+
+    [Test]
+    public async Task InputValidator_RejectsShellMetacharacters()
+    {
+        await Assert.That(AndroidInputValidator.IsPackageName("com.novolis.readaloud")).IsTrue();
+        await Assert.That(AndroidInputValidator.IsPackageName("com.novolis; rm -rf /")).IsFalse();
+        await Assert.That(AndroidInputValidator.QuoteShellArgument("hello 'phone'"))
+            .IsEqualTo("'hello '\\''phone'\\'''");
+    }
+
+    [Test]
+    public async Task OutputRedactor_RemovesCommonCredentialAssignments()
+    {
+        var raw = "Authorization: Bearer abc123 api_key=secret-value ordinary=value";
+        var redacted = AndroidOutputRedactor.Redact(raw);
+
+        await Assert.That(redacted).DoesNotContain("abc123");
+        await Assert.That(redacted).DoesNotContain("secret-value");
+        await Assert.That(redacted).Contains("[REDACTED]");
+        await Assert.That(redacted).Contains("ordinary=value");
+    }
+
+    [Test]
+    public async Task ApkValidator_RejectsSplitBundleForSingleApkInstaller()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"novolis-split-{Guid.NewGuid():N}.apks");
+        try
+        {
+            await using (var zip = System.IO.Compression.ZipFile.Open(
+                             path,
+                             System.IO.Compression.ZipArchiveMode.Create))
+            {
+                zip.CreateEntry("base-master.apk");
+            }
+
+            var result = ApkValidator.Validate(path, new ApkInstallOptions { MinApkBytes = 1 });
+
+            await Assert.That(result.Ok).IsFalse();
+            await Assert.That(result.ArtifactKind).IsEqualTo(AndroidArtifactKind.SplitSet);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { /* ignore */ }
+        }
+    }
 }

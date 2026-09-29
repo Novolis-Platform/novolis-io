@@ -11,6 +11,9 @@ public sealed class AndroidAppInstaller
     private static readonly Regex VersionNameRegex = new(@"versionName=([^\s]+)", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex VersionCodeRegex = new(@"versionCode=(\d+)", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex PmPathRegex = new(@"package:(.+)", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly Regex SigningDigestRegex = new(
+        @"(?i)(?:sha[- ]?256|signing(?:Certificate|Info)?|cert(?:ificate)?)[^0-9A-F]*([0-9A-F](?:[: -]?[0-9A-F]){31,63})",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private readonly AndroidDebugBridge _adb;
 
@@ -42,7 +45,16 @@ public sealed class AndroidAppInstaller
     /// <summary>
     /// Validates the APK, waits for a ready device, installs, optionally verifies and launches.
     /// </summary>
-    public ApkInstallResult Install(string apkPath, ApkInstallOptions? options = null)
+    public ApkInstallResult Install(string apkPath, ApkInstallOptions? options = null) =>
+        InstallAsync(apkPath, options).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Asynchronously validates, installs, verifies, and optionally launches an APK.
+    /// </summary>
+    public async Task<ApkInstallResult> InstallAsync(
+        string apkPath,
+        ApkInstallOptions? options = null,
+        CancellationToken cancellationToken = default)
     {
         options ??= new ApkInstallOptions();
         var validation = ApkValidator.Validate(apkPath, options);
@@ -53,13 +65,38 @@ public sealed class AndroidAppInstaller
                 string.Join("; ", validation.Errors),
                 validation.ApkPath,
                 options.Serial,
-                validation: validation);
+                validation: validation,
+                failureKind: AndroidFailureKind.InvalidInput);
         }
 
         AdbDevice device;
         try
         {
-            device = _adb.WaitForDevice(options.DeviceWaitTimeout, options.Serial);
+            device = await _adb.WaitForDeviceAsync(
+                    options.DeviceWaitTimeout,
+                    options.Serial,
+                    cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (AndroidOperationException ex)
+        {
+            return new ApkInstallResult(
+                false,
+                ex.Failure.Message,
+                validation.ApkPath,
+                options.Serial,
+                validation: validation,
+                failureKind: ex.Failure.Kind);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new ApkInstallResult(
+                false,
+                "Device wait cancelled.",
+                validation.ApkPath,
+                options.Serial,
+                validation: validation,
+                failureKind: AndroidFailureKind.Cancelled);
         }
         catch (Exception ex)
         {
@@ -68,7 +105,8 @@ public sealed class AndroidAppInstaller
                 ex.Message,
                 validation.ApkPath,
                 options.Serial,
-                validation: validation);
+                validation: validation,
+                failureKind: AndroidFailureKind.Transport);
         }
 
         if (device.State != AdbDeviceState.Device)
@@ -78,11 +116,17 @@ public sealed class AndroidAppInstaller
                 $"Device {device.Serial} is {device.State} (need Device/online).",
                 validation.ApkPath,
                 device.Serial,
-                validation: validation);
+                validation: validation,
+                failureKind: AndroidFailure.ForDevice(device).Kind);
         }
 
         var args = BuildInstallArgs(options);
-        var install = _adb.Install(validation.ApkPath, device.Serial, args);
+        var install = await _adb.InstallAsync(
+                validation.ApkPath,
+                device.Serial,
+                cancellationToken,
+                args)
+            .ConfigureAwait(false);
         if (!install.Ok)
         {
             return new ApkInstallResult(
@@ -91,15 +135,18 @@ public sealed class AndroidAppInstaller
                 validation.ApkPath,
                 device.Serial,
                 validation: validation,
-                install: install);
+                install: install,
+                failureKind: install.FailureKind);
         }
 
         AndroidPackageInfo? package = null;
         if (options.VerifyInstalled && !string.IsNullOrWhiteSpace(options.ExpectedPackageName))
         {
-            // Brief settle for package manager.
-            Thread.Sleep(200);
-            package = _adb.TryGetPackageInfo(options.ExpectedPackageName, device.Serial);
+            package = await WaitForPackageAsync(
+                    options.ExpectedPackageName,
+                    device.Serial,
+                    cancellationToken)
+                .ConfigureAwait(false);
             if (package is null || !package.IsInstalled)
             {
                 return new ApkInstallResult(
@@ -109,12 +156,54 @@ public sealed class AndroidAppInstaller
                     device.Serial,
                     package,
                     validation,
-                    install);
+                    install,
+                    AndroidFailureKind.VerificationFailed);
+            }
+
+            if (!string.IsNullOrWhiteSpace(options.ExpectedSigningCertificateSha256)
+                && !string.Equals(
+                    NormalizeDigest(package.SigningCertificateSha256),
+                    NormalizeDigest(options.ExpectedSigningCertificateSha256),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return new ApkInstallResult(
+                    false,
+                    $"Installed package '{options.ExpectedPackageName}' has an unexpected signing certificate.",
+                    validation.ApkPath,
+                    device.Serial,
+                    package,
+                    validation,
+                    install,
+                    AndroidFailureKind.VerificationFailed);
             }
         }
         else if (!string.IsNullOrWhiteSpace(options.ExpectedPackageName))
         {
-            package = _adb.TryGetPackageInfo(options.ExpectedPackageName, device.Serial);
+            package = await _adb.TryGetPackageInfoAsync(
+                    options.ExpectedPackageName,
+                    device.Serial,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.ExpectedSigningCertificateSha256))
+        {
+            if (package is null
+                || !string.Equals(
+                    NormalizeDigest(package.SigningCertificateSha256),
+                    NormalizeDigest(options.ExpectedSigningCertificateSha256),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return new ApkInstallResult(
+                    false,
+                    "Installed package signing certificate did not match the expected SHA-256 digest.",
+                    validation.ApkPath,
+                    device.Serial,
+                    package,
+                    validation,
+                    install,
+                    AndroidFailureKind.VerificationFailed);
+            }
         }
 
         if (options.LaunchAfterInstall)
@@ -128,10 +217,15 @@ public sealed class AndroidAppInstaller
                     device.Serial,
                     package,
                     validation,
-                    install);
+                    install,
+                    AndroidFailureKind.InvalidInput);
             }
 
-            var launch = _adb.StartApp(options.ExpectedPackageName, device.Serial);
+            var launch = await _adb.StartAppAsync(
+                    options.ExpectedPackageName,
+                    device.Serial,
+                    cancellationToken)
+                .ConfigureAwait(false);
             if (!launch.Ok)
             {
                 return new ApkInstallResult(
@@ -141,7 +235,8 @@ public sealed class AndroidAppInstaller
                     device.Serial,
                     package,
                     validation,
-                    install);
+                    install,
+                    launch.FailureKind);
             }
         }
 
@@ -153,6 +248,29 @@ public sealed class AndroidAppInstaller
             : $"Installed {Path.GetFileName(validation.ApkPath)} on {device.Serial}.";
 
         return new ApkInstallResult(true, msg, validation.ApkPath, device.Serial, package, validation, install);
+    }
+
+    private async Task<AndroidPackageInfo?> WaitForPackageAsync(
+        string packageName,
+        string serial,
+        CancellationToken cancellationToken)
+    {
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(10);
+        AndroidPackageInfo? package = null;
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            package = await _adb.TryGetPackageInfoAsync(
+                    packageName,
+                    serial,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (package is { IsInstalled: true })
+                return package;
+            await Task.Delay(TimeSpan.FromMilliseconds(200), cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        return package;
     }
 
     /// <summary>Builds <c>adb install</c> flag list from options.</summary>
@@ -186,6 +304,7 @@ public sealed class AndroidAppInstaller
 
         string? versionName = null;
         int? versionCode = null;
+        string? signingDigest = null;
         if (!string.IsNullOrWhiteSpace(dumpsysSnippet))
         {
             var vn = VersionNameRegex.Match(dumpsysSnippet);
@@ -194,9 +313,12 @@ public sealed class AndroidAppInstaller
             var vc = VersionCodeRegex.Match(dumpsysSnippet);
             if (vc.Success && int.TryParse(vc.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var code))
                 versionCode = code;
+            var signature = SigningDigestRegex.Match(dumpsysSnippet);
+            if (signature.Success)
+                signingDigest = NormalizeDigest(signature.Groups[1].Value);
         }
 
-        if (apkPath is null && versionName is null && versionCode is null)
+        if (apkPath is null && versionName is null && versionCode is null && signingDigest is null)
             return null;
 
         return new AndroidPackageInfo
@@ -205,6 +327,15 @@ public sealed class AndroidAppInstaller
             ApkPath = apkPath,
             VersionName = versionName,
             VersionCode = versionCode,
+            SigningCertificateSha256 = signingDigest,
         };
+    }
+
+    private static string? NormalizeDigest(string? digest)
+    {
+        if (string.IsNullOrWhiteSpace(digest))
+            return null;
+        var normalized = new string(digest.Where(Uri.IsHexDigit).ToArray());
+        return normalized.Length == 0 ? null : normalized.ToUpperInvariant();
     }
 }
