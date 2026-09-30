@@ -1,50 +1,5 @@
 namespace Novolis.IO.Git;
 
-/// <summary>Per-repo batch outcome.</summary>
-public sealed class BatchRepoResult
-{
-    /// <summary>Repo.</summary>
-    public required RepoEntry Repo { get; init; }
-
-    /// <summary>ok | skipped | failed.</summary>
-    public required string Outcome { get; init; }
-
-    /// <summary>Message.</summary>
-    public required string Message { get; init; }
-
-    /// <summary>Optional planned argv for dry-run.</summary>
-    public IReadOnlyList<string>? PlannedArgs { get; init; }
-}
-
-/// <summary>Batch operation result.</summary>
-public sealed class BatchResult
-{
-    /// <summary>Per-repo results.</summary>
-    public IReadOnlyList<BatchRepoResult> Results { get; init; } = [];
-
-    /// <summary>True when every non-skipped repo succeeded.</summary>
-    public bool Ok => Results.All(r => r.Outcome is "ok" or "skipped");
-
-    /// <summary>Any failures.</summary>
-    public bool HasFailures => Results.Any(r => r.Outcome == "failed");
-}
-
-/// <summary>Batch options.</summary>
-public sealed class BatchOptions
-{
-    /// <summary>Max parallel git processes.</summary>
-    public int Parallel { get; init; } = 6;
-
-    /// <summary>When true, skip dirty repos on mutate.</summary>
-    public bool SkipDirty { get; init; } = true;
-
-    /// <summary>Dry-run (no mutate).</summary>
-    public bool DryRun { get; init; }
-
-    /// <summary>Workspace root for locks/state.</summary>
-    public string? WorkspaceRoot { get; init; }
-}
-
 /// <summary>Parallel fetch / pull / checkout across repos.</summary>
 public sealed class GitWorkspaceBatch
 {

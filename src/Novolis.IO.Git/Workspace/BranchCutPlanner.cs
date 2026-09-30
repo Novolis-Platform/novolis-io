@@ -1,56 +1,5 @@
 namespace Novolis.IO.Git;
 
-/// <summary>Planned branch-cut for one repo.</summary>
-public sealed class BranchCutRepoStep
-{
-    /// <summary>Repo.</summary>
-    public required RepoEntry Repo { get; init; }
-
-    /// <summary>Planned git argv.</summary>
-    public required IReadOnlyList<string> PlannedArgs { get; init; }
-
-    /// <summary>Block reason if not applicable.</summary>
-    public string? BlockReason { get; init; }
-}
-
-/// <summary>A branch-cut plan.</summary>
-public sealed class BranchPlan
-{
-    /// <summary>Plan id.</summary>
-    public required string Id { get; init; }
-
-    /// <summary>Branch name.</summary>
-    public required string Name { get; init; }
-
-    /// <summary>Base ref.</summary>
-    public required string BaseRef { get; init; }
-
-    /// <summary>Workspace root.</summary>
-    public required string WorkspaceRoot { get; init; }
-
-    /// <summary>Steps.</summary>
-    public IReadOnlyList<BranchCutRepoStep> Steps { get; init; } = [];
-
-    /// <summary>Created UTC.</summary>
-    public DateTimeOffset CreatedAt { get; init; }
-}
-
-/// <summary>Apply outcome for a plan.</summary>
-public sealed class BranchPlanResult
-{
-    /// <summary>Plan id.</summary>
-    public required string PlanId { get; init; }
-
-    /// <summary>Dry-run flag.</summary>
-    public bool DryRun { get; init; }
-
-    /// <summary>Batch-style results.</summary>
-    public IReadOnlyList<BatchRepoResult> Results { get; init; } = [];
-
-    /// <summary>Overall ok.</summary>
-    public bool Ok => Results.All(r => r.Outcome is "ok" or "skipped");
-}
-
 /// <summary>Plans and applies the same feature branch across many repos.</summary>
 public sealed class BranchCutPlanner
 {

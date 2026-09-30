@@ -63,19 +63,3 @@ public sealed class IoTests
         await Assert.That(status.LastCommitSha).IsEqualTo("abc123");
     }
 }
-
-sealed class FakeGitRunner : IGitProcessRunner
-{
-    readonly Dictionary<string, GitProcessResult> _map = new(StringComparer.Ordinal);
-
-    public void Set(string[] args, int exitCode, string stdout, string stderr = "") =>
-        _map[string.Join('\0', args)] = new GitProcessResult(exitCode, stdout, stderr);
-
-    public GitProcessResult Run(string workingDirectory, params string[] args)
-    {
-        var key = string.Join('\0', args);
-        if (_map.TryGetValue(key, out var result))
-            return result;
-        return new GitProcessResult(1, "", "unexpected: " + string.Join(' ', args));
-    }
-}
