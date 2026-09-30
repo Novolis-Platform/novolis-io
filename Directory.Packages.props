@@ -11,8 +11,8 @@
     <PackageVersion Include="Octokit" Version="14.0.0" />
     <PackageVersion Include="AdvancedSharpAdbClient" Version="3.6.16" />
     <PackageVersion Include="JetBrains.Annotations" Version="2025.2.4" />
-    <PackageVersion Include="System.IO.Abstractions" Version="22.2.0" />
-    <PackageVersion Include="System.IO.Abstractions.TestingHelpers" Version="22.2.0" />
-    <PackageVersion Include="TUnit" Version="1.68.17" />
+    <PackageVersion Include="System.IO.Abstractions" Version="22.3.0" />
+    <PackageVersion Include="System.IO.Abstractions.TestingHelpers" Version="22.3.0" />
+    <PackageVersion Include="TUnit" Version="1.72.4" />
   </ItemGroup>
 </Project>
