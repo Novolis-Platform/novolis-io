@@ -24,6 +24,9 @@ public sealed class XyzMapSourceOptions
     /// <summary>Minimum interval between cache eviction scans.</summary>
     public TimeSpan MinimumEvictionInterval { get; init; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>Clock used for cache freshness, eviction, and request throttling.</summary>
+    public TimeProvider TimeProvider { get; init; } = TimeProvider.System;
+
     internal void Validate()
     {
         if (MaximumCacheBytes <= 0)
@@ -40,5 +43,6 @@ public sealed class XyzMapSourceOptions
             throw new ArgumentOutOfRangeException(nameof(MinimumRequestInterval));
         if (MinimumEvictionInterval < TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(MinimumEvictionInterval));
+        ArgumentNullException.ThrowIfNull(TimeProvider);
     }
 }

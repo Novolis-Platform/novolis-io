@@ -9,11 +9,15 @@ public sealed class NominatimPlaceSearch : IMapPlaceSearch
 {
     const string SearchEndpoint = "https://nominatim.openstreetmap.org/search";
     readonly HttpClient _httpClient;
+    readonly TimeProvider _timeProvider;
 
     /// <summary>Creates a rate-limited search client over an HTTP client.</summary>
-    public NominatimPlaceSearch(HttpClient httpClient)
+    public NominatimPlaceSearch(
+        HttpClient httpClient,
+        TimeProvider? timeProvider = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _timeProvider = timeProvider ?? TimeProvider.System;
         if (_httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
             _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Novolis.IO.Maps/1.0");
     }
@@ -27,6 +31,7 @@ public sealed class NominatimPlaceSearch : IMapPlaceSearch
         await MapRequestRateLimiterRegistry.WaitAsync(
             "nominatim-search",
             TimeSpan.FromSeconds(1),
+            _timeProvider,
             cancellationToken);
         var uri =
             $"{SearchEndpoint}?format=jsonv2&limit=10"

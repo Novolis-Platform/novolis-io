@@ -8,11 +8,15 @@ public sealed class GeonorgeAddressSearch : IMapPlaceSearch
 {
     const string SearchEndpoint = "https://ws.geonorge.no/adresser/v1/sok";
     readonly HttpClient _httpClient;
+    readonly TimeProvider _timeProvider;
 
     /// <summary>Creates a search client over a caller-owned HTTP client.</summary>
-    public GeonorgeAddressSearch(HttpClient httpClient)
+    public GeonorgeAddressSearch(
+        HttpClient httpClient,
+        TimeProvider? timeProvider = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _timeProvider = timeProvider ?? TimeProvider.System;
         if (_httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
             _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Novolis.IO.Maps/1.0");
     }
@@ -26,6 +30,7 @@ public sealed class GeonorgeAddressSearch : IMapPlaceSearch
         await MapRequestRateLimiterRegistry.WaitAsync(
             "geonorge-address",
             TimeSpan.FromMilliseconds(250),
+            _timeProvider,
             cancellationToken);
         var uri =
             $"{SearchEndpoint}?sok={Uri.EscapeDataString(query.Trim())}"

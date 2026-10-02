@@ -1,31 +1,33 @@
-using System.Diagnostics;
-
 namespace Novolis.IO.Maps;
 
 internal sealed class MapRequestRateLimiter
 {
     readonly SemaphoreSlim _gate = new(1, 1);
-    long _lastRequestTimestamp;
+    long? _lastRequestTimestamp;
 
     public async ValueTask WaitAsync(
         TimeSpan minimumInterval,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            var intervalTicks = (long)(
-                minimumInterval.TotalSeconds * Stopwatch.Frequency);
-            var now = Stopwatch.GetTimestamp();
-            var remaining = _lastRequestTimestamp + intervalTicks - now;
-            if (remaining > 0)
+            var now = timeProvider.GetTimestamp();
+            if (_lastRequestTimestamp is { } lastRequest)
             {
-                await Task.Delay(
-                    TimeSpan.FromSeconds((double)remaining / Stopwatch.Frequency),
-                    cancellationToken);
+                var remaining = minimumInterval
+                    - timeProvider.GetElapsedTime(lastRequest, now);
+                if (remaining > TimeSpan.Zero)
+                {
+                    await Task.Delay(
+                        remaining,
+                        timeProvider,
+                        cancellationToken);
+                }
             }
 
-            _lastRequestTimestamp = Stopwatch.GetTimestamp();
+            _lastRequestTimestamp = timeProvider.GetTimestamp();
         }
         finally
         {

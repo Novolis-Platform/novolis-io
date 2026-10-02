@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
@@ -96,6 +97,7 @@ public sealed class XyzMapSource : IMapRasterSource, IDisposable
                 await MapRequestRateLimiterRegistry.WaitAsync(
                     _rateLimiterKey,
                     _options.MinimumRequestInterval,
+                    _options.TimeProvider,
                     _lifetime.Token);
                 using var response = await _httpClient.GetAsync(
                     Template.BuildUri(key),
@@ -170,7 +172,7 @@ public sealed class XyzMapSource : IMapRasterSource, IDisposable
         string path,
         CancellationToken cancellationToken)
     {
-        var age = FileAge(path);
+        var age = FileAge(path, _options.TimeProvider);
         if (age is null
             || age < TimeSpan.Zero
             || age > Template.MinimumCacheAge)
@@ -185,7 +187,7 @@ public sealed class XyzMapSource : IMapRasterSource, IDisposable
         string path,
         CancellationToken cancellationToken)
     {
-        var age = FileAge(path);
+        var age = FileAge(path, _options.TimeProvider);
         if (age is null
             || age < TimeSpan.Zero
             || age > _options.MaximumStaleAge)
@@ -295,7 +297,7 @@ public sealed class XyzMapSource : IMapRasterSource, IDisposable
     async Task MaybeEvictAsync()
     {
         if (_options.MinimumEvictionInterval > TimeSpan.Zero
-            && DateTimeOffset.UtcNow - _lastEvictionAt
+            && _options.TimeProvider.GetUtcNow() - _lastEvictionAt
                 < _options.MinimumEvictionInterval)
         {
             return;
@@ -304,7 +306,7 @@ public sealed class XyzMapSource : IMapRasterSource, IDisposable
         await _evictionGate.WaitAsync(_lifetime.Token);
         try
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = _options.TimeProvider.GetUtcNow();
             if (_options.MinimumEvictionInterval > TimeSpan.Zero
                 && now - _lastEvictionAt < _options.MinimumEvictionInterval)
             {
@@ -351,12 +353,12 @@ public sealed class XyzMapSource : IMapRasterSource, IDisposable
         }
     }
 
-    static TimeSpan? FileAge(string path)
+    static TimeSpan? FileAge(string path, TimeProvider timeProvider)
     {
         if (!File.Exists(path))
             return null;
 
-        var age = DateTime.UtcNow - File.GetLastWriteTimeUtc(path);
+        var age = timeProvider.GetUtcNow() - File.GetLastWriteTimeUtc(path);
         return age;
     }
 
@@ -377,6 +379,50 @@ public sealed class XyzMapSource : IMapRasterSource, IDisposable
 
         if (bytes.Length > maximumBytes)
             throw new InvalidDataException("The map tile response is too large.");
+
+        var offset = 8;
+        var hasHeader = false;
+        var hasEnd = false;
+        while (offset + 12 <= bytes.Length)
+        {
+            var chunkLength = BinaryPrimitives.ReadUInt32BigEndian(
+                bytes.AsSpan(offset, sizeof(uint)));
+            if (chunkLength > int.MaxValue)
+                throw new InvalidDataException("The map tile PNG chunk is too large.");
+
+            var chunkEnd = offset + 12L + chunkLength;
+            if (chunkEnd > bytes.Length)
+                throw new InvalidDataException("The map tile PNG is truncated.");
+
+            var chunkType = bytes.AsSpan(offset + 4, 4);
+            if (!hasHeader)
+            {
+                if (!chunkType.SequenceEqual("IHDR"u8) || chunkLength != 13)
+                    throw new InvalidDataException("The map tile PNG has no valid IHDR chunk.");
+
+                var width = BinaryPrimitives.ReadUInt32BigEndian(
+                    bytes.AsSpan(offset + 8, sizeof(uint)));
+                var height = BinaryPrimitives.ReadUInt32BigEndian(
+                    bytes.AsSpan(offset + 12, sizeof(uint)));
+                if (width == 0 || height == 0)
+                    throw new InvalidDataException("The map tile PNG has an empty image size.");
+
+                hasHeader = true;
+            }
+
+            offset = (int)chunkEnd;
+            if (chunkType.SequenceEqual("IEND"u8))
+            {
+                if (chunkLength != 0)
+                    throw new InvalidDataException("The map tile PNG has an invalid IEND chunk.");
+
+                hasEnd = true;
+                break;
+            }
+        }
+
+        if (!hasHeader || !hasEnd)
+            throw new InvalidDataException("The map tile PNG has no complete image data.");
     }
 
     static string CacheSegment(XyzMapTemplate template)

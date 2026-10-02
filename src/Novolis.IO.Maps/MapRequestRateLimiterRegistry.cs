@@ -10,8 +10,9 @@ internal static class MapRequestRateLimiterRegistry
     public static ValueTask WaitAsync(
         string provider,
         TimeSpan minimumInterval,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken) =>
         Limiters
             .GetOrAdd(provider, static _ => new MapRequestRateLimiter())
-            .WaitAsync(minimumInterval, cancellationToken);
+            .WaitAsync(minimumInterval, timeProvider, cancellationToken);
 }
