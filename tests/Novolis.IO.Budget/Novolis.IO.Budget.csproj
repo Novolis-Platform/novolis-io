@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RootNamespace>Novolis.IO.Budget</RootNamespace>
+    <TestingPlatformCommandLineArguments>--show-stdout All</TestingPlatformCommandLineArguments>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="TUnit" />

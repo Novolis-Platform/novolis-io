@@ -1,11 +1,13 @@
 using System.Text;
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Exporters.Json;
 using Novolis.IO.Ndjson;
 
 namespace Novolis.IO.Ndjson.Benchmarks;
 
 [MemoryDiagnoser]
-public sealed class NdjsonBenchmarks
+[JsonExporterAttribute.FullCompressed]
+public class NdjsonBenchmarks
 {
     private const int IndexInterval = 10_000;
     private readonly Random _random = new(1729);

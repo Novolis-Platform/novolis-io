@@ -11,9 +11,8 @@ public sealed class NdjsonBudgetTests
 {
     private const int SizeBytes = 4 * 1024 * 1024;
 
-    // Local sample 2026-10-03, five iterations on a 4 MiB short/LF file:
-    // first slice 7 ms / 639 KB, index 80 ms / 1.1 MB, seek 15 ms / 376 KB, refresh 80 ms / 1.3 MB.
-    // Ceilings keep about 50x elapsed and 20x allocations so a hosted runner still passes.
+    // Wide gate until a hosted log prints the highlight row. Refresh measures append of 1,000
+    // records plus one Refresh; truncate and the baseline refresh run in Prepare and are not timed.
     private static readonly BudgetLimits FirstSliceCeiling = new(
         MaxElapsed: TimeSpan.FromSeconds(1),
         MaxAllocatedBytes: 16L * 1024 * 1024);
@@ -112,15 +111,22 @@ public sealed class NdjsonBudgetTests
             await document.RefreshAsync();
             var startCount = document.RecordCount;
             var observed = 0L;
-            var sample = await BudgetProbe.MeasureAsync(Run("IncrementalRefresh", "refreshes/s"), async cancellationToken =>
-            {
-                Truncate(file, baseline);
-                await document.RefreshAsync(cancellationToken);
-                Append(file, 100, startCount);
-                await document.RefreshAsync(cancellationToken);
-                observed = document.RecordCount;
-            });
-            await Assert.That(observed).IsEqualTo(startCount + 100);
+            var sample = await BudgetProbe.MeasureAsync(
+                Run("IncrementalRefresh", "refreshes/s") with
+                {
+                    Prepare = async cancellationToken =>
+                    {
+                        Truncate(file, baseline);
+                        await document.RefreshAsync(cancellationToken);
+                    },
+                },
+                async cancellationToken =>
+                {
+                    Append(file, 1_000, startCount);
+                    await document.RefreshAsync(cancellationToken);
+                    observed = document.RecordCount;
+                });
+            await Assert.That(observed).IsEqualTo(startCount + 1_000);
             await sample.AssertWithin(RefreshCeiling);
         }
         finally
