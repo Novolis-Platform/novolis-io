@@ -1,27 +1,45 @@
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using Novolis.Math.Geometry;
 
 namespace Novolis.IO.Maps;
 
-/// <summary>HTTP and disk-cache implementation for an XYZ raster service.</summary>
-public sealed class XyzMapSource : IMapRasterSource
+/// <summary>HTTP and bounded disk-cache implementation for an XYZ raster service.</summary>
+public sealed class XyzMapSource : IMapRasterSource, IDisposable
 {
     readonly HttpClient _httpClient;
-    readonly string _cacheDirectory;
+    readonly string _cacheRoot;
+    readonly XyzMapSourceOptions _options;
+    readonly SemaphoreSlim _requestGate;
+    readonly SemaphoreSlim _evictionGate = new(1, 1);
+    readonly CancellationTokenSource _lifetime = new();
+    readonly ConcurrentDictionary<
+        MapTileKey,
+        Lazy<Task<MapRasterTile?>>> _inflight = new();
+    DateTimeOffset _lastEvictionAt = DateTimeOffset.MinValue;
+    bool _disposed;
 
     /// <summary>Creates a source with a caller-owned cache directory.</summary>
     public XyzMapSource(
         HttpClient httpClient,
         XyzMapTemplate template,
         string cacheDirectory,
-        string userAgent)
+        string userAgent,
+        XyzMapSourceOptions? options = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         Template = template ?? throw new ArgumentNullException(nameof(template));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheDirectory);
         ArgumentException.ThrowIfNullOrWhiteSpace(userAgent);
 
-        _cacheDirectory = Path.GetFullPath(cacheDirectory);
-        Directory.CreateDirectory(_cacheDirectory);
+        _options = options ?? new XyzMapSourceOptions();
+        _options.Validate();
+        _requestGate = new SemaphoreSlim(_options.MaximumConcurrentRequests);
+
+        var root = Path.GetFullPath(cacheDirectory);
+        _cacheRoot = Path.Combine(root, CacheSegment(template));
+        Directory.CreateDirectory(_cacheRoot);
         if (_httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
             _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent.Trim());
     }
@@ -34,46 +52,130 @@ public sealed class XyzMapSource : IMapRasterSource
         MapTileKey key,
         CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var path = CachePath(key);
-        if (File.Exists(path))
-        {
-            var age = DateTime.UtcNow - File.GetLastWriteTimeUtc(path);
-            if (age < Template.MinimumCacheAge)
-            {
-                var cached = await TryReadAsync(path, cancellationToken);
-                if (cached is not null)
-                    return new MapRasterTile(key, cached);
-            }
-        }
+        var fresh = await TryReadFreshAsync(path, cancellationToken);
+        if (fresh is not null)
+            return new MapRasterTile(key, fresh);
 
-        byte[]? stale = await TryReadAsync(path, cancellationToken);
+        var lazy = _inflight.GetOrAdd(
+            key,
+            static (tileKey, source) => new Lazy<Task<MapRasterTile?>>(
+                () => source.LoadTileCoreAsync(tileKey),
+                LazyThreadSafetyMode.ExecutionAndPublication),
+            this);
+        var task = lazy.Value;
         try
         {
-            var bytes = await _httpClient.GetByteArrayAsync(
-                Template.BuildUri(key),
-                cancellationToken);
-            await WriteAtomicallyAsync(path, bytes, cancellationToken);
-            return new MapRasterTile(key, bytes);
+            return await task.WaitAsync(cancellationToken);
+        }
+        finally
+        {
+            if (task.IsCompleted
+                && _inflight.TryGetValue(key, out var current)
+                && ReferenceEquals(current, lazy))
+            {
+                _inflight.TryRemove(key, out _);
+            }
+        }
+    }
+
+    async Task<MapRasterTile?> LoadTileCoreAsync(MapTileKey key)
+    {
+        var path = CachePath(key);
+        var stale = await TryReadStaleAsync(path, _lifetime.Token);
+
+        try
+        {
+            await _requestGate.WaitAsync(_lifetime.Token);
+            try
+            {
+                using var response = await _httpClient.GetAsync(
+                    Template.BuildUri(key),
+                    HttpCompletionOption.ResponseHeadersRead,
+                    _lifetime.Token);
+                response.EnsureSuccessStatusCode();
+
+                var contentLength = response.Content.Headers.ContentLength;
+                if (contentLength is > 0
+                    && contentLength > _options.MaximumTileBytes)
+                    throw new InvalidDataException("The map tile response is too large.");
+
+                var mediaType = response.Content.Headers.ContentType?.MediaType;
+                if (mediaType is not null
+                    && !mediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidDataException(
+                        $"The map tile response has unexpected content type '{mediaType}'.");
+                }
+
+                var bytes = await response.Content.ReadAsByteArrayAsync(_lifetime.Token);
+                ValidatePng(bytes, _options.MaximumTileBytes);
+                await WriteAtomicallyAsync(path, bytes, _lifetime.Token);
+                await MaybeEvictAsync();
+                return new MapRasterTile(key, bytes);
+            }
+            finally
+            {
+                _requestGate.Release();
+            }
         }
         catch (HttpRequestException)
         {
-            return stale is null ? null : new MapRasterTile(key, stale);
+            return stale is null ? null : new MapRasterTile(key, stale, IsStale: true);
         }
         catch (IOException)
         {
-            return stale is null ? null : new MapRasterTile(key, stale);
+            return stale is null ? null : new MapRasterTile(key, stale, IsStale: true);
+        }
+        catch (InvalidDataException)
+        {
+            return stale is null ? null : new MapRasterTile(key, stale, IsStale: true);
+        }
+        catch (TaskCanceledException) when (!_lifetime.IsCancellationRequested)
+        {
+            return stale is null ? null : new MapRasterTile(key, stale, IsStale: true);
         }
     }
 
     string CachePath(MapTileKey key) =>
         Path.Combine(
-            _cacheDirectory,
-            CacheSegment(Template.Name),
+            _cacheRoot,
             key.Zoom.ToString(global::System.Globalization.CultureInfo.InvariantCulture),
             key.X.ToString(global::System.Globalization.CultureInfo.InvariantCulture),
             $"{key.Y.ToString(global::System.Globalization.CultureInfo.InvariantCulture)}.png");
 
-    static async Task<byte[]?> TryReadAsync(
+    async Task<byte[]?> TryReadFreshAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        var age = FileAge(path);
+        if (age is null
+            || age < TimeSpan.Zero
+            || age > Template.MinimumCacheAge)
+        {
+            return null;
+        }
+
+        return await TryReadValidBytesAsync(path, cancellationToken);
+    }
+
+    async Task<byte[]?> TryReadStaleAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        var age = FileAge(path);
+        if (age is null
+            || age < TimeSpan.Zero
+            || age > _options.MaximumStaleAge)
+        {
+            return null;
+        }
+
+        return await TryReadValidBytesAsync(path, cancellationToken);
+    }
+
+    async Task<byte[]?> TryReadValidBytesAsync(
         string path,
         CancellationToken cancellationToken)
     {
@@ -82,7 +184,13 @@ public sealed class XyzMapSource : IMapRasterSource
 
         try
         {
-            return await File.ReadAllBytesAsync(path, cancellationToken);
+            var info = new FileInfo(path);
+            if (info.Length <= 0 || info.Length > _options.MaximumTileBytes)
+                return null;
+
+            var bytes = await File.ReadAllBytesAsync(path, cancellationToken);
+            ValidatePng(bytes, _options.MaximumTileBytes);
+            return bytes;
         }
         catch (FileNotFoundException)
         {
@@ -92,9 +200,13 @@ public sealed class XyzMapSource : IMapRasterSource
         {
             return null;
         }
+        catch (InvalidDataException)
+        {
+            return null;
+        }
     }
 
-    static async Task WriteAtomicallyAsync(
+    async Task WriteAtomicallyAsync(
         string path,
         byte[] bytes,
         CancellationToken cancellationToken)
@@ -122,15 +234,125 @@ public sealed class XyzMapSource : IMapRasterSource
         }
     }
 
-    static string CacheSegment(string value)
+    async Task MaybeEvictAsync()
     {
-        var characters = value
-            .Trim()
-            .Select(character =>
-                char.IsLetterOrDigit(character) || character is '-' or '_'
-                    ? character
-                    : '-')
-            .ToArray();
-        return characters.Length == 0 ? "map" : new string(characters);
+        if (_options.MinimumEvictionInterval > TimeSpan.Zero
+            && DateTimeOffset.UtcNow - _lastEvictionAt
+                < _options.MinimumEvictionInterval)
+        {
+            return;
+        }
+
+        await _evictionGate.WaitAsync(_lifetime.Token);
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            if (_options.MinimumEvictionInterval > TimeSpan.Zero
+                && now - _lastEvictionAt < _options.MinimumEvictionInterval)
+            {
+                return;
+            }
+
+            _lastEvictionAt = now;
+            var files = Directory
+                .EnumerateFiles(_cacheRoot, "*.png", SearchOption.AllDirectories)
+                .Select(path => new FileInfo(path))
+                .OrderBy(file => file.LastWriteTimeUtc)
+                .ToList();
+            long totalBytes = files.Sum(file => file.Length);
+            var removeCount = global::System.Math.Max(
+                0,
+                files.Count - _options.MaximumCachedTiles);
+            for (var index = 0; index < files.Count; index++)
+            {
+                if (index < removeCount
+                    || totalBytes > _options.MaximumCacheBytes)
+                {
+                    try
+                    {
+                        totalBytes -= files[index].Length;
+                        files[index].Delete();
+                    }
+                    catch (IOException)
+                    {
+                        // Another process may have evicted the same tile.
+                    }
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        catch (DirectoryNotFoundException)
+        {
+        }
+        finally
+        {
+            _evictionGate.Release();
+        }
+    }
+
+    static TimeSpan? FileAge(string path)
+    {
+        if (!File.Exists(path))
+            return null;
+
+        var age = DateTime.UtcNow - File.GetLastWriteTimeUtc(path);
+        return age;
+    }
+
+    static void ValidatePng(byte[] bytes, int maximumBytes)
+    {
+        if (bytes.Length < 8
+            || bytes[0] != 0x89
+            || bytes[1] != 0x50
+            || bytes[2] != 0x4E
+            || bytes[3] != 0x47
+            || bytes[4] != 0x0D
+            || bytes[5] != 0x0A
+            || bytes[6] != 0x1A
+            || bytes[7] != 0x0A)
+        {
+            throw new InvalidDataException("The map tile response is not a PNG image.");
+        }
+
+        if (bytes.Length > maximumBytes)
+            throw new InvalidDataException("The map tile response is too large.");
+    }
+
+    static string CacheSegment(XyzMapTemplate template)
+    {
+        var identity = string.Join(
+            "\n",
+            template.Name,
+            template.UrlTemplate,
+            template.AxisOrder,
+            string.Join(",", template.Subdomains));
+        var hash = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(identity)))
+            .ToLowerInvariant()[..16];
+        var name = new string(
+            template.Name
+                .Trim()
+                .Select(character =>
+                    char.IsLetterOrDigit(character) || character is '-' or '_'
+                        ? character
+                        : '-')
+                .ToArray());
+        return $"{(name.Length == 0 ? "map" : name)}-{hash}";
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        _lifetime.Cancel();
+        _requestGate.Dispose();
+        _evictionGate.Dispose();
+        _lifetime.Dispose();
     }
 }
