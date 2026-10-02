@@ -11,24 +11,29 @@ public sealed class NdjsonBudgetTests
 {
     private const int SizeBytes = 4 * 1024 * 1024;
 
-    // Wide gate until a hosted log prints the highlight row. Refresh measures append of 1,000
-    // records plus one Refresh; truncate and the baseline refresh run in Prepare and are not timed.
+    // Local five-iteration sample, 4 MiB short/LF, 2026-10-03:
+    // first slice 9.867 ms / 638,984 B, index 90.653 ms / 1,152,864 B,
+    // seek 16.656 ms / 376,000 B / 300 seeks/s, refresh 17.451 ms / 1,444,256 B.
+    // The hosted suite finished in 1.53s against 1.35s here, so these are about 10x local
+    // elapsed (5x a runner twice as slow) and about 5x allocations.
+    // Refresh measures append of 1,000 records plus one Refresh. Truncate and the baseline
+    // refresh run in Prepare and are not timed.
     private static readonly BudgetLimits FirstSliceCeiling = new(
-        MaxElapsed: TimeSpan.FromSeconds(1),
-        MaxAllocatedBytes: 16L * 1024 * 1024);
+        MaxElapsed: TimeSpan.FromMilliseconds(100),
+        MaxAllocatedBytes: 4L * 1024 * 1024);
 
     private static readonly BudgetLimits IndexCeiling = new(
-        MaxElapsed: TimeSpan.FromSeconds(5),
-        MaxAllocatedBytes: 32L * 1024 * 1024);
+        MaxElapsed: TimeSpan.FromSeconds(1),
+        MaxAllocatedBytes: 8L * 1024 * 1024);
 
     private static readonly BudgetLimits SeekCeiling = new(
-        MaxElapsed: TimeSpan.FromSeconds(1),
-        MaxAllocatedBytes: 16L * 1024 * 1024,
-        MinThroughput: 5);
+        MaxElapsed: TimeSpan.FromMilliseconds(200),
+        MaxAllocatedBytes: 2L * 1024 * 1024,
+        MinThroughput: 30);
 
     private static readonly BudgetLimits RefreshCeiling = new(
-        MaxElapsed: TimeSpan.FromSeconds(5),
-        MaxAllocatedBytes: 32L * 1024 * 1024);
+        MaxElapsed: TimeSpan.FromMilliseconds(200),
+        MaxAllocatedBytes: 8L * 1024 * 1024);
 
     [Test]
     public async Task TimeToFirstSlice_stays_within_ceiling()
