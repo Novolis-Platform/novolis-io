@@ -601,4 +601,45 @@ public sealed class MapProviderTests
 
         await Assert.That(nominatimResults).IsEmpty();
     }
+
+    [Test]
+    public async Task ProceduralMapRasterSource_is_deterministic_and_tile_bounded()
+    {
+        var source = new ProceduralMapRasterSource(tileSize: 16);
+        var key = new MapTileKey(4, 3, 7);
+
+        var first = await source.GetTileAsync(key);
+        var second = await source.GetTileAsync(key);
+        var visible = WebMercatorTiles.VisibleTiles(
+            new GeoCoordinate(58.14623, 7.99517),
+            zoom: 6,
+            width: 800,
+            height: 600);
+        var generated = new List<MapTileKey>();
+        foreach (var visibleKey in visible)
+        {
+            generated.Add((await source.GetTileAsync(visibleKey))!.Key);
+        }
+
+        await Assert.That(first).IsNotNull();
+        await Assert.That(second).IsNotNull();
+        await Assert.That(first!.PngBytes.SequenceEqual(second!.PngBytes)).IsTrue();
+        await Assert.That(first.PngBytes).IsNotEmpty();
+        await Assert.That(generated).IsEquivalentTo(visible);
+        await Assert.That(source.Template.Attribution).IsEqualTo("Generated locally");
+    }
+
+    [Test]
+    public async Task ProceduralMapRasterSource_honors_cancellation_without_network()
+    {
+        var source = new ProceduralMapRasterSource(tileSize: 256);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.That(async () =>
+                await source.GetTileAsync(
+                    new MapTileKey(2, 1, 1),
+                    cancellation.Token))
+            .Throws<OperationCanceledException>();
+    }
 }

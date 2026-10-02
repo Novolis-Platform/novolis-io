@@ -467,8 +467,8 @@ public sealed class XyzMapSource : IMapRasterSource, IDisposable
 
         _disposed = true;
         _lifetime.Cancel();
-        _requestGate.Dispose();
-        _evictionGate.Dispose();
-        _lifetime.Dispose();
+        // In-flight loads may still be unwinding their finally blocks. Keep
+        // the gates valid until those continuations release them; the source
+        // is otherwise unreachable after disposal and can be collected.
     }
 }
