@@ -36,3 +36,23 @@ separate from tile selection.
 ```bash
 dotnet add package Novolis.IO.Maps
 ```
+
+**Prerequisites:** [.NET 10 SDK](https://dotnet.microsoft.com/download) (`net10.0`).
+
+## Quick start
+
+```csharp
+using Novolis.IO.Maps;
+using Novolis.Math.Geometry;
+
+using var http = new HttpClient();
+using var source = new XyzMapSource(
+    http,
+    MapPresets.OpenStreetMapStandard,
+    cacheDirectory: Path.Combine(Path.GetTempPath(), "map-cache"),
+    userAgent: "example-app/1.0 (contact: maps@example.com)");
+
+MapRasterTile? tile = await source.GetTileAsync(new MapTileKey(zoom: 3, x: 4, y: 5));
+```
+
+Show `source.Template.Attribution` next to the map. OpenStreetMap standard tiles follow the OSMF tile usage policy.
