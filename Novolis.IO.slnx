@@ -15,7 +15,11 @@
     <Project Path="src/Novolis.IO.Platform.Android/Novolis.IO.Platform.Android.csproj" />
     <Project Path="src/Novolis.IO.Ndjson/Novolis.IO.Ndjson.csproj" />
   </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Novolis.IO.Ndjson.Benchmarks/Novolis.IO.Ndjson.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Novolis.IO.Unit/Novolis.IO.Unit.csproj" />
+    <Project Path="tests/Novolis.IO.Budget/Novolis.IO.Budget.csproj" />
   </Folder>
 </Solution>

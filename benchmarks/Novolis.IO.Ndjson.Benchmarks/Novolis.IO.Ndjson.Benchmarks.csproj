@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Novolis.IO.Ndjson.Benchmarks</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <IsTestingPlatformApplication>false</IsTestingPlatformApplication>
+    <NovolisGraphicalProfile>false</NovolisGraphicalProfile>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Novolis.IO.Ndjson/Novolis.IO.Ndjson.csproj" />
+  </ItemGroup>
+</Project>

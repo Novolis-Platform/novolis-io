@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Novolis.IO.Budget</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="TUnit" />
+    <LibraryReference Include="Novolis.Testing.Budgets" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Novolis.IO.Ndjson/Novolis.IO.Ndjson.csproj" />
+  </ItemGroup>
+</Project>

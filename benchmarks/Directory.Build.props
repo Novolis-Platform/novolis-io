@@ -1,0 +1,5 @@
+<Project>
+  <Import Project="$(MSBuildThisFileDirectory)..\Directory.Build.props" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\novolis-governance\build\Novolis.Benchmarks.props"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\novolis-governance\build\Novolis.Benchmarks.props')" />
+</Project>

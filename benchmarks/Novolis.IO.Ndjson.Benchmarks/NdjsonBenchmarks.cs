@@ -12,6 +12,8 @@ public sealed class NdjsonBenchmarks
     private FileInfo? _file;
     private INdjsonDocument? _indexedDocument;
     private long _recordCount;
+    private long _baselineLength;
+    private long _baselineRecordCount;
 
     [Params(100)]
     public int SizeMegabytes { get; set; }
@@ -37,6 +39,16 @@ public sealed class NdjsonBenchmarks
             .GetAwaiter()
             .GetResult();
         _indexedDocument.RefreshAsync().GetAwaiter().GetResult();
+        _recordCount = _indexedDocument.RecordCount;
+        _baselineLength = _file.Length;
+        _baselineRecordCount = _recordCount;
+    }
+
+    [IterationSetup(Target = nameof(IncrementalRefreshAsync))]
+    public void ResetIncrementalFile()
+    {
+        Truncate(_file!, _baselineLength);
+        _indexedDocument!.RefreshAsync().GetAwaiter().GetResult();
         _recordCount = _indexedDocument.RecordCount;
     }
 
@@ -74,10 +86,19 @@ public sealed class NdjsonBenchmarks
     [Benchmark]
     public async Task<long> IncrementalRefreshAsync()
     {
-        AppendRecords(_file!, RecordShape, NewlineStyle, 1_000, _recordCount);
+        AppendRecords(_file!, RecordShape, NewlineStyle, 1_000, _baselineRecordCount);
         await _indexedDocument!.RefreshAsync();
-        _recordCount = _indexedDocument.RecordCount;
-        return _recordCount;
+        return _indexedDocument.RecordCount;
+    }
+
+    private static void Truncate(FileInfo file, long length)
+    {
+        using var stream = new FileStream(
+            file.FullName,
+            FileMode.Open,
+            FileAccess.Write,
+            FileShare.ReadWrite);
+        stream.SetLength(length);
     }
 
     private static void GenerateFile(
