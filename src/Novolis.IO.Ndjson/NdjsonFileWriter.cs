@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 
 namespace Novolis.IO.Ndjson;
@@ -9,7 +8,6 @@ namespace Novolis.IO.Ndjson;
 /// </summary>
 public sealed class NdjsonFileWriter : IDisposable
 {
-    private static readonly byte[] NewLine = [(byte)'\n'];
     private readonly JsonSerializerOptions _options;
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private int _disposed;
@@ -20,6 +18,9 @@ public sealed class NdjsonFileWriter : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         Path = System.IO.Path.GetFullPath(path);
         _options = options ?? new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var directory = System.IO.Path.GetDirectoryName(Path);
+        if (!string.IsNullOrWhiteSpace(directory))
+            Directory.CreateDirectory(directory);
     }
 
     /// <summary>Creates an append writer for <paramref name="file"/>.</summary>
@@ -104,13 +105,9 @@ public sealed class NdjsonFileWriter : IDisposable
 
     private void WriteLine(ReadOnlySpan<byte> json, bool flushToDisk)
     {
-        var directory = System.IO.Path.GetDirectoryName(Path);
-        if (!string.IsNullOrWhiteSpace(directory))
-            Directory.CreateDirectory(directory);
-
+        var payload = CreatePayload(json);
         using var stream = Open(FileOptions.None);
-        stream.Write(json);
-        stream.Write(NewLine);
+        stream.Write(payload);
         stream.Flush(flushToDisk);
     }
 
@@ -118,14 +115,18 @@ public sealed class NdjsonFileWriter : IDisposable
         ReadOnlyMemory<byte> json,
         CancellationToken cancellationToken)
     {
-        var directory = System.IO.Path.GetDirectoryName(Path);
-        if (!string.IsNullOrWhiteSpace(directory))
-            Directory.CreateDirectory(directory);
-
+        var payload = CreatePayload(json.Span);
         await using var stream = Open(FileOptions.Asynchronous);
-        await stream.WriteAsync(json, cancellationToken).ConfigureAwait(false);
-        await stream.WriteAsync(NewLine, cancellationToken).ConfigureAwait(false);
+        await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
         await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static byte[] CreatePayload(ReadOnlySpan<byte> json)
+    {
+        var payload = new byte[json.Length + 1];
+        json.CopyTo(payload);
+        payload[^1] = (byte)'\n';
+        return payload;
     }
 
     private FileStream Open(FileOptions options) =>

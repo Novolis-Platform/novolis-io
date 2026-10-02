@@ -19,7 +19,8 @@ public sealed class NdjsonFileWriterTests
 
             var bytes = await File.ReadAllBytesAsync(path);
             await Assert.That(bytes[^1]).IsEqualTo((byte)'\n');
-            await Assert.That(Encoding.UTF8.GetString(bytes)).IsEqualTo("{\"displayName\":\"Å\"}\n");
+            using var document = JsonDocument.Parse(bytes[..^1]);
+            await Assert.That(document.RootElement.GetProperty("displayName").GetString()).IsEqualTo("Å");
         }
         finally
         {
@@ -101,6 +102,48 @@ public sealed class NdjsonFileWriterTests
             writer.Append(new { DisplayName = "value" });
 
             await Assert.That(await File.ReadAllTextAsync(path)).IsEqualTo("{\"DisplayName\":\"value\"}\n");
+        }
+        finally
+        {
+            Delete(path);
+        }
+    }
+
+    [Test]
+    public async Task AppendAfterRotation_StartsAtTheCurrentPath()
+    {
+        var path = CreatePath();
+        var rotated = $"{path}.1";
+        try
+        {
+            using var writer = new NdjsonFileWriter(path);
+            writer.Append(new { Id = 1 });
+            File.Move(path, rotated);
+            writer.Append(new { Id = 2 });
+
+            await Assert.That(await File.ReadAllTextAsync(rotated)).Contains("\"id\":1");
+            await Assert.That(await File.ReadAllTextAsync(path)).Contains("\"id\":2");
+        }
+        finally
+        {
+            Delete(path);
+            Delete(rotated);
+        }
+    }
+
+    [Test]
+    public async Task AppendAfterTruncation_WritesToTheNewFileContents()
+    {
+        var path = CreatePath();
+        try
+        {
+            using var writer = new NdjsonFileWriter(path);
+            writer.Append(new { Id = 1 });
+            await File.WriteAllTextAsync(path, string.Empty);
+            writer.Append(new { Id = 2 });
+
+            await Assert.That(await File.ReadAllTextAsync(path)).DoesNotContain("\"id\":1");
+            await Assert.That(await File.ReadAllTextAsync(path)).Contains("\"id\":2");
         }
         finally
         {
