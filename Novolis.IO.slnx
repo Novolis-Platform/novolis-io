@@ -11,6 +11,7 @@
     <Project Path="src/Novolis.IO.GitHub/Novolis.IO.GitHub.csproj" />
     <Project Path="src/Novolis.IO.Indexing/Novolis.IO.Indexing.csproj" />
     <Project Path="src/Novolis.IO.Mobile.Android/Novolis.IO.Mobile.Android.csproj" />
+    <Project Path="src/Novolis.IO.Platform.Android/Novolis.IO.Platform.Android.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Novolis.IO.Unit/Novolis.IO.Unit.csproj" />
