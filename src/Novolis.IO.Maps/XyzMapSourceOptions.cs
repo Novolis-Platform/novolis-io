@@ -18,6 +18,9 @@ public sealed class XyzMapSourceOptions
     /// <summary>Maximum simultaneous provider requests for this source.</summary>
     public int MaximumConcurrentRequests { get; init; } = 6;
 
+    /// <summary>Minimum interval between requests to the same tile provider.</summary>
+    public TimeSpan MinimumRequestInterval { get; init; } = TimeSpan.FromMilliseconds(50);
+
     /// <summary>Minimum interval between cache eviction scans.</summary>
     public TimeSpan MinimumEvictionInterval { get; init; } = TimeSpan.FromSeconds(30);
 
@@ -33,6 +36,8 @@ public sealed class XyzMapSourceOptions
             throw new ArgumentOutOfRangeException(nameof(MaximumTileBytes));
         if (MaximumConcurrentRequests <= 0)
             throw new ArgumentOutOfRangeException(nameof(MaximumConcurrentRequests));
+        if (MinimumRequestInterval < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(MinimumRequestInterval));
         if (MinimumEvictionInterval < TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(MinimumEvictionInterval));
     }

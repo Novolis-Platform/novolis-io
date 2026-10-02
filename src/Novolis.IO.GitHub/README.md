@@ -58,6 +58,7 @@ Mirror state is kept under `{WorkspaceRoot}/.novolis/mobile-mirror.json`.
 | `GitHubDeviceAuth` | Device code + token wait/poll |
 | `DeviceCodeResponse` | User code, verification URIs, interval, expiry |
 | `DeviceTokenResult` | Access token or pending/error |
+| `GitHubRepository` | Stable raw-content and latest-release URLs |
 | `SparseRepoMirror` | Sparse pull / dirty tracking / commit+push |
 | `SparseRepoMirrorOptions` | Owner, name, workspace root, content prefix |
 | `MirrorPullResult` / `MirrorPushResult` | Ok, message, commit SHA, file count |

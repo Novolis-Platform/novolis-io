@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
@@ -10,6 +11,7 @@ public sealed class XyzMapSource : IMapRasterSource, IDisposable
 {
     readonly HttpClient _httpClient;
     readonly string _cacheRoot;
+    readonly string _rateLimiterKey;
     readonly XyzMapSourceOptions _options;
     readonly SemaphoreSlim _requestGate;
     readonly SemaphoreSlim _evictionGate = new(1, 1);
@@ -36,6 +38,7 @@ public sealed class XyzMapSource : IMapRasterSource, IDisposable
         _options = options ?? new XyzMapSourceOptions();
         _options.Validate();
         _requestGate = new SemaphoreSlim(_options.MaximumConcurrentRequests);
+        _rateLimiterKey = ProviderRateLimiterKey(template);
 
         var root = Path.GetFullPath(cacheDirectory);
         _cacheRoot = Path.Combine(root, CacheSegment(template));
@@ -90,6 +93,10 @@ public sealed class XyzMapSource : IMapRasterSource, IDisposable
             await _requestGate.WaitAsync(_lifetime.Token);
             try
             {
+                await MapRequestRateLimiterRegistry.WaitAsync(
+                    _rateLimiterKey,
+                    _options.MinimumRequestInterval,
+                    _lifetime.Token);
                 using var response = await _httpClient.GetAsync(
                     Template.BuildUri(key),
                     HttpCompletionOption.ResponseHeadersRead,
@@ -109,10 +116,24 @@ public sealed class XyzMapSource : IMapRasterSource, IDisposable
                         $"The map tile response has unexpected content type '{mediaType}'.");
                 }
 
-                var bytes = await response.Content.ReadAsByteArrayAsync(_lifetime.Token);
+                var bytes = await ReadBoundedAsync(
+                    response.Content,
+                    _options.MaximumTileBytes,
+                    _lifetime.Token);
                 ValidatePng(bytes, _options.MaximumTileBytes);
                 await WriteAtomicallyAsync(path, bytes, _lifetime.Token);
-                await MaybeEvictAsync();
+                try
+                {
+                    await MaybeEvictAsync();
+                }
+                catch (IOException)
+                {
+                    // A cache maintenance failure must not hide a valid tile.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // A cache maintenance failure must not hide a valid tile.
+                }
                 return new MapRasterTile(key, bytes);
             }
             finally
@@ -234,6 +255,43 @@ public sealed class XyzMapSource : IMapRasterSource, IDisposable
         }
     }
 
+    static async Task<byte[]> ReadBoundedAsync(
+        HttpContent content,
+        int maximumBytes,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
+        using var output = new MemoryStream(
+            global::System.Math.Min(maximumBytes, 64 * 1024));
+        var buffer = ArrayPool<byte>.Shared.Rent(81920);
+        var total = 0;
+        try
+        {
+            while (true)
+            {
+                var read = await stream.ReadAsync(
+                    buffer.AsMemory(
+                        0,
+                        global::System.Math.Min(buffer.Length, maximumBytes - total + 1)),
+                    cancellationToken);
+                if (read == 0)
+                    break;
+
+                total += read;
+                if (total > maximumBytes)
+                    throw new InvalidDataException("The map tile response is too large.");
+
+                output.Write(buffer, 0, read);
+            }
+
+            return output.ToArray();
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
     async Task MaybeEvictAsync()
     {
         if (_options.MinimumEvictionInterval > TimeSpan.Zero
@@ -341,6 +399,18 @@ public sealed class XyzMapSource : IMapRasterSource, IDisposable
                         : '-')
                 .ToArray());
         return $"{(name.Length == 0 ? "map" : name)}-{hash}";
+    }
+
+    static string ProviderRateLimiterKey(XyzMapTemplate template)
+    {
+        var value = template.UrlTemplate
+            .Replace("{z}", "0", StringComparison.Ordinal)
+            .Replace("{x}", "0", StringComparison.Ordinal)
+            .Replace("{y}", "0", StringComparison.Ordinal)
+            .Replace("{s}", "subdomain", StringComparison.Ordinal);
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            ? $"tiles:{uri.Host}"
+            : $"tiles:{template.Name}";
     }
 
     /// <inheritdoc />

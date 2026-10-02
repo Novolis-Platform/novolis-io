@@ -35,10 +35,12 @@ public sealed class NdjsonFileWriter : IDisposable
     /// <summary>Appends one serialized value and an LF terminator.</summary>
     public ValueTask AppendAsync<T>(
         T value,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default,
+        bool flushToDisk = false) =>
         AppendSerializedAsync(
             JsonSerializer.SerializeToUtf8Bytes(value, _options),
-            cancellationToken);
+            cancellationToken,
+            flushToDisk);
 
     /// <summary>
     /// Appends one serialized value and an LF terminator synchronously.
@@ -62,8 +64,9 @@ public sealed class NdjsonFileWriter : IDisposable
     /// <summary>Appends an already serialized UTF-8 JSON value and an LF.</summary>
     public ValueTask AppendJsonAsync(
         ReadOnlyMemory<byte> json,
-        CancellationToken cancellationToken = default) =>
-        AppendSerializedAsync(json, cancellationToken);
+        CancellationToken cancellationToken = default,
+        bool flushToDisk = false) =>
+        AppendSerializedAsync(json, cancellationToken, flushToDisk);
 
     /// <summary>Appends an already serialized UTF-8 JSON value and an LF synchronously.</summary>
     public void AppendJson(ReadOnlySpan<byte> json, bool flushToDisk = false)
@@ -89,13 +92,14 @@ public sealed class NdjsonFileWriter : IDisposable
 
     private async ValueTask AppendSerializedAsync(
         ReadOnlyMemory<byte> json,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool flushToDisk)
     {
         ThrowIfDisposed();
         await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await WriteLineAsync(json, cancellationToken).ConfigureAwait(false);
+            await WriteLineAsync(json, cancellationToken, flushToDisk).ConfigureAwait(false);
         }
         finally
         {
@@ -113,12 +117,15 @@ public sealed class NdjsonFileWriter : IDisposable
 
     private async ValueTask WriteLineAsync(
         ReadOnlyMemory<byte> json,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool flushToDisk)
     {
         var payload = CreatePayload(json.Span);
         await using var stream = Open(FileOptions.Asynchronous);
         await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
         await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+        if (flushToDisk)
+            stream.Flush(flushToDisk: true);
     }
 
     private static byte[] CreatePayload(ReadOnlySpan<byte> json)
