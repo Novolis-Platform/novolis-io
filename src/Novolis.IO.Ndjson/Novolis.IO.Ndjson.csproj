@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Novolis.IO.Ndjson</PackageId>
+    <Description>Seekable NDJSON reader and append-only UTF-8 line writer with bounded memory and incremental refresh.</Description>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>Novolis.IO.Ndjson</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>

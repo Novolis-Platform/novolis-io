@@ -8,10 +8,12 @@
     <Project Path="src/Novolis.IO.Recovery/Novolis.IO.Recovery.csproj" />
     <Project Path="src/Novolis.IO.Processes/Novolis.IO.Processes.csproj" />
     <Project Path="src/Novolis.IO.Paths/Novolis.IO.Paths.csproj" />
+    <Project Path="src/Novolis.IO.Maps/Novolis.IO.Maps.csproj" />
     <Project Path="src/Novolis.IO.GitHub/Novolis.IO.GitHub.csproj" />
     <Project Path="src/Novolis.IO.Indexing/Novolis.IO.Indexing.csproj" />
     <Project Path="src/Novolis.IO.Mobile.Android/Novolis.IO.Mobile.Android.csproj" />
     <Project Path="src/Novolis.IO.Platform.Android/Novolis.IO.Platform.Android.csproj" />
+    <Project Path="src/Novolis.IO.Ndjson/Novolis.IO.Ndjson.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Novolis.IO.Unit/Novolis.IO.Unit.csproj" />

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Novolis.IO.Maps</PackageId>
+    <Description>Provider-neutral XYZ raster map and place-search clients.</Description>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>Novolis.IO.Maps</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <LibraryReference Include="Novolis.Math.Geometry" />
+  </ItemGroup>
+</Project>
