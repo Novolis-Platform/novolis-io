@@ -9,12 +9,14 @@ public sealed class NominatimPlaceSearch : IMapPlaceSearch
 {
     const string SearchEndpoint = "https://nominatim.openstreetmap.org/search";
     readonly HttpClient _httpClient;
-    readonly SemaphoreSlim _requestGate = new(1, 1);
-    DateTimeOffset _lastRequestStarted = DateTimeOffset.MinValue;
 
     /// <summary>Creates a rate-limited search client over an HTTP client.</summary>
-    public NominatimPlaceSearch(HttpClient httpClient) =>
+    public NominatimPlaceSearch(HttpClient httpClient)
+    {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        if (_httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Novolis.IO.Maps/1.0");
+    }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<MapPlace>> SearchAsync(
@@ -22,61 +24,42 @@ public sealed class NominatimPlaceSearch : IMapPlaceSearch
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
-        await _requestGate.WaitAsync(cancellationToken);
-        try
+        await MapRequestRateLimiterRegistry.WaitAsync(
+            "nominatim-search",
+            TimeSpan.FromSeconds(1),
+            cancellationToken);
+        var uri =
+            $"{SearchEndpoint}?format=jsonv2&limit=10"
+            + $"&q={Uri.EscapeDataString(query.Trim())}";
+
+        var json = await _httpClient.GetStringAsync(uri, cancellationToken);
+        using var document = JsonDocument.Parse(json);
+        if (document.RootElement.ValueKind != JsonValueKind.Array)
+            return [];
+
+        var results = new List<MapPlace>();
+        foreach (var place in document.RootElement.EnumerateArray())
         {
-            var nextAllowed = _lastRequestStarted.AddSeconds(1);
-            var delay = nextAllowed - DateTimeOffset.UtcNow;
-            if (delay > TimeSpan.Zero)
-                await Task.Delay(delay, cancellationToken);
+            if (!place.TryGetProperty("display_name", out var label)
+                || !TryGetDouble(place, "lat", out var latitude)
+                || !TryGetDouble(place, "lon", out var longitude))
+            {
+                continue;
+            }
 
-            _lastRequestStarted = DateTimeOffset.UtcNow;
-            var uri =
-                $"{SearchEndpoint}?format=jsonv2&limit=10"
-                + $"&q={Uri.EscapeDataString(query.Trim())}";
-
-            string json;
             try
             {
-                json = await _httpClient.GetStringAsync(uri, cancellationToken);
+                results.Add(new MapPlace(
+                    label.GetString() ?? "Unnamed place",
+                    new GeoCoordinate(latitude, longitude)));
             }
-            catch (HttpRequestException)
+            catch (ArgumentOutOfRangeException)
             {
-                return [];
+                // Ignore malformed provider entries.
             }
-
-            using var document = JsonDocument.Parse(json);
-            if (document.RootElement.ValueKind != JsonValueKind.Array)
-                return [];
-
-            var results = new List<MapPlace>();
-            foreach (var place in document.RootElement.EnumerateArray())
-            {
-                if (!place.TryGetProperty("display_name", out var label)
-                    || !TryGetDouble(place, "lat", out var latitude)
-                    || !TryGetDouble(place, "lon", out var longitude))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    results.Add(new MapPlace(
-                        label.GetString() ?? "Unnamed place",
-                        new GeoCoordinate(latitude, longitude)));
-                }
-                catch (ArgumentOutOfRangeException)
-                {
-                    // Ignore malformed provider entries.
-                }
-            }
-
-            return results;
         }
-        finally
-        {
-            _requestGate.Release();
-        }
+
+        return results;
     }
 
     static bool TryGetDouble(

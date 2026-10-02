@@ -7,6 +7,8 @@ namespace Novolis.IO.Unit;
 
 public sealed class MapProviderTests
 {
+    static readonly byte[] ValidPng = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
     [Test]
     public async Task Presets_build_the_documented_tile_urls()
     {
@@ -28,7 +30,7 @@ public sealed class MapProviderTests
         var handler = new MapTestHttpHandler(_ =>
             new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new ByteArrayContent([1, 2, 3]),
+                Content = new ByteArrayContent(ValidPng),
             });
         using var client = new HttpClient(handler);
         var cache = Directory.CreateTempSubdirectory("novolis-map-test-");
@@ -51,10 +53,9 @@ public sealed class MapProviderTests
             await Assert.That(first).IsNotNull();
             await Assert.That(second).IsNotNull();
             await Assert.That(
-                    first!.PngBytes.Length == 3
-                    && first.PngBytes[0] == 1
-                    && first.PngBytes[1] == 2
-                    && first.PngBytes[2] == 3)
+                    first!.PngBytes.Length == ValidPng.Length
+                    && first.PngBytes[0] == ValidPng[0]
+                    && first.PngBytes[7] == ValidPng[7])
                 .IsTrue();
             await Assert.That(handler.Requests).Count().IsEqualTo(1);
             await Assert.That(handler.Requests[0].ToString())
