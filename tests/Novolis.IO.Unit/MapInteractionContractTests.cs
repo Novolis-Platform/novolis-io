@@ -106,4 +106,24 @@ public sealed class MapInteractionContractTests
         await Assert.That(GeoCoordinateText.ToJson(coordinate, "office", "Office"))
             .Contains("\"latitude\": 58.14623");
     }
+
+    [Test]
+    public async Task Projected_scene_points_preserve_selection_data_without_a_map_provider()
+    {
+        var point = new ProjectedScenePoint(
+            "sol",
+            0,
+            0,
+            "Sol",
+            radiusPixels: 8,
+            magnitude: -26.7,
+            metadata: new Dictionary<string, string> { ["frame"] = "EquatorialJ2000" },
+            tag: "source-payload");
+
+        await Assert.That(point.Id).IsEqualTo("sol");
+        await Assert.That(point.Metadata!["frame"]).IsEqualTo("EquatorialJ2000");
+        await Assert.That(point.Tag).IsEqualTo("source-payload");
+        await Assert.That(() => new ProjectedScenePoint(" ", 0, 0))
+            .Throws<ArgumentException>();
+    }
 }
