@@ -8,6 +8,12 @@ namespace Novolis.IO.GitHub;
 /// <summary>GitHub OAuth Device Authorization Grant client.</summary>
 public sealed class GitHubDeviceAuth
 {
+    const int MaxHttpAttempts = 3;
+    static readonly TimeSpan[] HttpRetryDelays =
+    [
+        TimeSpan.FromMilliseconds(150),
+        TimeSpan.FromMilliseconds(500),
+    ];
     static readonly Uri DeviceCodeEndpoint = new("https://github.com/login/device/code");
     static readonly Uri TokenEndpoint = new("https://github.com/login/oauth/access_token");
     static readonly JsonSerializerOptions JsonOptions = new()
@@ -20,7 +26,10 @@ public sealed class GitHubDeviceAuth
     /// <summary>Creates a client using a dedicated <see cref="HttpClient"/>.</summary>
     public GitHubDeviceAuth(HttpClient? httpClient = null)
     {
-        _http = httpClient ?? new HttpClient();
+        // Android's native handler can dispose the Java response stream while
+        // HttpClient is copying it. SocketsHttpHandler keeps this auth flow on the
+        // managed implementation while preserving the injectable client for tests.
+        _http = httpClient ?? new HttpClient(new SocketsHttpHandler());
         if (!_http.DefaultRequestHeaders.Accept.Any(h => h.MediaType == "application/json"))
             _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
@@ -44,17 +53,16 @@ public sealed class GitHubDeviceAuth
         if (!isGitHubApp && !string.IsNullOrWhiteSpace(scope))
             fields["scope"] = scope;
 
-        using var content = new FormUrlEncodedContent(fields);
-        using var response = await _http.PostAsync(DeviceCodeEndpoint, content, cancellationToken).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var response = await PostFormAndReadAsync(DeviceCodeEndpoint, fields, cancellationToken)
+            .ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"Device code request failed ({(int)response.StatusCode}): {body}");
+            throw new InvalidOperationException($"Device code request failed ({response.StatusCode}): {response.Body}");
 
-        var dto = JsonSerializer.Deserialize<DeviceCodeDto>(body, JsonOptions)
+        var dto = JsonSerializer.Deserialize<DeviceCodeDto>(response.Body, JsonOptions)
             ?? throw new InvalidOperationException("Device code response was empty.");
         if (string.IsNullOrWhiteSpace(dto.DeviceCode) || string.IsNullOrWhiteSpace(dto.UserCode)
             || string.IsNullOrWhiteSpace(dto.VerificationUri))
-            throw new InvalidOperationException($"Incomplete device code response: {body}");
+            throw new InvalidOperationException($"Incomplete device code response: {response.Body}");
 
         var verify = new Uri(dto.VerificationUri);
         Uri complete;
@@ -92,15 +100,13 @@ public sealed class GitHubDeviceAuth
         ArgumentException.ThrowIfNullOrWhiteSpace(clientId);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceCode);
 
-        using var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        var response = await PostFormAndReadAsync(TokenEndpoint, new Dictionary<string, string>
         {
             ["client_id"] = clientId,
             ["device_code"] = deviceCode,
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:device_code",
-        });
-        using var response = await _http.PostAsync(TokenEndpoint, content, cancellationToken).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        var dto = JsonSerializer.Deserialize<TokenDto>(body, JsonOptions)
+        }, cancellationToken).ConfigureAwait(false);
+        var dto = JsonSerializer.Deserialize<TokenDto>(response.Body, JsonOptions)
             ?? throw new InvalidOperationException("Token response was empty.");
 
         if (!string.IsNullOrWhiteSpace(dto.AccessToken))
@@ -139,6 +145,55 @@ public sealed class GitHubDeviceAuth
 
         throw new TimeoutException("GitHub device authorization timed out.");
     }
+
+    async Task<HttpPostResult> PostFormAndReadAsync(
+        Uri endpoint,
+        IReadOnlyDictionary<string, string> fields,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                using var content = new FormUrlEncodedContent(fields);
+                using var response = await _http.PostAsync(endpoint, content, cancellationToken)
+                    .ConfigureAwait(false);
+                var body = await response.Content.ReadAsStringAsync(cancellationToken)
+                    .ConfigureAwait(false);
+                return new HttpPostResult(
+                    response.IsSuccessStatusCode,
+                    (int)response.StatusCode,
+                    body);
+            }
+            catch (Exception exception) when (IsTransientHttpFailure(exception))
+            {
+                if (attempt + 1 >= MaxHttpAttempts)
+                {
+                    throw new HttpRequestException(
+                        "GitHub connection failed while reading the response. Check your network and try again.",
+                        exception);
+                }
+
+                await Task.Delay(HttpRetryDelays[attempt], cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    static bool IsTransientHttpFailure(Exception exception)
+    {
+        if (exception is OperationCanceledException)
+            return false;
+
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is HttpRequestException or IOException or ObjectDisposedException)
+                return true;
+        }
+
+        return false;
+    }
+
+    readonly record struct HttpPostResult(bool IsSuccessStatusCode, int StatusCode, string Body);
 
     sealed class DeviceCodeDto
     {

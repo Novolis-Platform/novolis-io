@@ -27,6 +27,28 @@ public sealed class GitHubTests
     }
 
     [Test]
+    public async Task DeviceAuth_retries_android_content_copy_failures()
+    {
+        var handler = new ThrowOnceHandler(
+            new HttpRequestException(
+                "net_http_content_stream_copy_error",
+                new ObjectDisposedException("InputStream")),
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"device_code":"dev","user_code":"ABCD-1234","verification_uri":"https://github.com/login/device","interval":5,"expires_in":900}""",
+                    Encoding.UTF8,
+                    "application/json"),
+            });
+        var auth = new GitHubDeviceAuth(new HttpClient(handler));
+
+        var device = await auth.RequestDeviceCodeAsync("client");
+
+        await Assert.That(device.DeviceCode).IsEqualTo("dev");
+        await Assert.That(handler.Attempts).IsEqualTo(2);
+    }
+
+    [Test]
     public async Task DeviceAuth_Poll_PendingThenSuccess()
     {
         var handler = new QueueHandler(
@@ -147,6 +169,21 @@ public sealed class GitHubTests
             if (_responses.Count == 0)
                 throw new InvalidOperationException("No queued HTTP responses.");
             return Task.FromResult(_responses.Dequeue());
+        }
+    }
+
+    sealed class ThrowOnceHandler(Exception failure, HttpResponseMessage response) : HttpMessageHandler
+    {
+        public int Attempts { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Attempts++;
+            if (Attempts == 1)
+                return Task.FromException<HttpResponseMessage>(failure);
+            return Task.FromResult(response);
         }
     }
 }
