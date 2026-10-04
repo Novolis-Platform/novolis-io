@@ -4,7 +4,7 @@
 public sealed class BranchCutRepoStep
 {
     /// <summary>Repo.</summary>
-    public required RepoEntry Repo { get; init; }
+    public required GitRepositoryWorkspace Repo { get; init; }
 
     /// <summary>Planned git argv.</summary>
     public required IReadOnlyList<string> PlannedArgs { get; init; }

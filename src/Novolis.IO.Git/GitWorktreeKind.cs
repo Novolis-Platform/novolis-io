@@ -1,7 +1,4 @@
-﻿using System.IO.Abstractions;
-using RootWorkspace = Novolis.IO.Workspace.IWorkspace;
-
-namespace Novolis.IO.Git;
+﻿namespace Novolis.IO.Git;
 
 /// <summary>Kind of Git worktree represented by a repository workspace.</summary>
 public enum GitWorktreeKind

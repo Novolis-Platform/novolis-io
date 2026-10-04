@@ -1,4 +1,5 @@
 using Novolis.IO.Git;
+using Novolis.IO.Paths;
 
 namespace Novolis.IO.Unit;
 
@@ -114,7 +115,7 @@ public sealed class GitOpsAndGraphTests
     }
 
     [Test]
-    public async Task GitWorkspace_discover_and_filter_names()
+    public async Task Forest_prefix_policy_ignores_gitless_and_filters_names()
     {
         var root = Directory.CreateTempSubdirectory("novolis-ws-");
         try
@@ -122,19 +123,39 @@ public sealed class GitOpsAndGraphTests
             var a = Path.Combine(root.FullName, "novolis-alpha");
             var b = Path.Combine(root.FullName, "novolis-beta");
             Directory.CreateDirectory(Path.Combine(a, ".git"));
-            Directory.CreateDirectory(b); // no git
-            File.WriteAllText(Path.Combine(root.FullName, "Novolis.Platform.slnx"), "");
+            Directory.CreateDirectory(b);
 
-            var found = GitWorkspace.Discover(root.FullName);
-            await Assert.That(found.Count).IsEqualTo(2);
-            await Assert.That(found.Count(r => r.IsGit)).IsEqualTo(1);
+            var prefix = MultiGitRepositoryWorkspace.Discover(root.FullName, GitDiscover.NovolisPrefix);
+            await Assert.That(prefix.Members.Count).IsEqualTo(1);
+            await Assert.That(prefix.Members[0].RepositoryName).IsEqualTo("novolis-alpha");
 
-            var selected = GitWorkspace.SelectByNames(found, new RepoFilter { Include = ["alpha"] });
-            await Assert.That(selected.Count).IsEqualTo(1);
-            await Assert.That(selected[0].Name).IsEqualTo("novolis-alpha");
+            var selected = prefix.Select(new RepoFilter { Include = ["alpha"] });
+            await Assert.That(selected.Members.Count).IsEqualTo(1);
+            await Assert.That(selected.Members[0].RepositoryName).IsEqualTo("novolis-alpha");
 
-            var resolved = GitWorkspace.ResolveRoot(root.FullName);
+            var resolved = CheckoutRoot.Resolve(root.FullName);
             await Assert.That(resolved).IsEqualTo(Path.GetFullPath(root.FullName));
+        }
+        finally
+        {
+            root.Delete(true);
+        }
+    }
+
+    [Test]
+    public async Task Forest_git_children_includes_non_prefix_and_ignores_gitless()
+    {
+        var root = Directory.CreateTempSubdirectory("novolis-ws-children-");
+        try
+        {
+            var sibling = Path.Combine(root.FullName, "merglyph");
+            var gitless = Path.Combine(root.FullName, "novolis-beta");
+            Directory.CreateDirectory(Path.Combine(sibling, ".git"));
+            Directory.CreateDirectory(gitless);
+
+            var forest = MultiGitRepositoryWorkspace.Discover(root.FullName);
+            await Assert.That(forest.Members.Count).IsEqualTo(1);
+            await Assert.That(forest.Members[0].RepositoryName).IsEqualTo("merglyph");
         }
         finally
         {
@@ -172,7 +193,7 @@ public sealed class GitOpsAndGraphTests
             var planner = new BranchCutPlanner(new GitRepositoryService(flex2));
             var plan = planner.Plan(temp.FullName, "feat/x",
             [
-                new RepoEntry { Name = "novolis-x", Path = repoPath, IsGit = true }
+                GitRepositoryWorkspace.Open(repoPath)
             ]);
             await Assert.That(plan.Steps[0].BlockReason).IsEqualTo("dirty worktree");
 

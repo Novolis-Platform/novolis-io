@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Novolis.IO.Workspace.Abstractions/Novolis.IO.Workspace.Abstractions.csproj" />
+    <ProjectReference Include="../Novolis.IO.Paths/Novolis.IO.Paths.csproj" />
     <PackageReference Include="System.IO.Abstractions" />
   </ItemGroup>
 </Project>

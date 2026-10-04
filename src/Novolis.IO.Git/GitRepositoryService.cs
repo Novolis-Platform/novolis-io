@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace Novolis.IO.Git;
 
-/// <summary>Git repository helper for status, history, stash, branches, and workspace ops.</summary>
+/// <summary>Git repository helper for status, history, stash, branches, and forest chorus ops.</summary>
 public sealed partial class GitRepositoryService
 {
     readonly IGitProcessRunner _runner;
@@ -21,7 +21,7 @@ public sealed partial class GitRepositoryService
             : passStoreRelativePath;
     }
 
-    /// <summary>Underlying process runner (for workspace batch sharing).</summary>
+    /// <summary>Underlying process runner (for forest batch sharing).</summary>
     public IGitProcessRunner Runner => _runner;
 
     /// <summary>Reads repository status (full: last commit + pass store).</summary>

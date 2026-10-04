@@ -4,7 +4,7 @@
 public sealed class BatchRepoResult
 {
     /// <summary>Repo.</summary>
-    public required RepoEntry Repo { get; init; }
+    public required GitRepositoryWorkspace Repo { get; init; }
 
     /// <summary>ok | skipped | failed.</summary>
     public required string Outcome { get; init; }

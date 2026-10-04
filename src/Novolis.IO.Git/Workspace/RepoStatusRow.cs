@@ -3,8 +3,8 @@
 /// <summary>Status row for one repo.</summary>
 public sealed class RepoStatusRow
 {
-    /// <summary>Repo entry.</summary>
-    public required RepoEntry Repo { get; init; }
+    /// <summary>Repo identity.</summary>
+    public required GitRepositoryWorkspace Repo { get; init; }
 
     /// <summary>Status when git; null when not.</summary>
     public GitStatus? Status { get; init; }

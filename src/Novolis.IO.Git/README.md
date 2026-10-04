@@ -10,7 +10,7 @@ Process-based Git helper (requires `git` on `PATH`) for Studio and RepoStudio:
 
 - Single-repo: status, checkpoint, passes, fetch/pull/push, branches, working tree, log, diff, stash
 - Commit graph lane layout (`CommitGraphBuilder`) — Avalonia-free DTOs
-- Workspace: discover `novolis-*`, status matrix, batch fetch/pull, branch-cut planner, fetch scheduler
+- Forest: discover git children under a checkout root, status matrix, batch fetch/pull, branch-cut planner, fetch scheduler
 
 ## Install
 
@@ -22,16 +22,17 @@ dotnet add package Novolis.IO.Git
 
 ```csharp
 using Novolis.IO.Git;
+using Novolis.IO.Paths;
 
 var git = new GitRepositoryService();
 var status = git.GetStatus(repoRoot);
 var graph = git.GetCommitGraph(repoRoot);
 
-var root = GitWorkspace.ResolveRoot();
-var matrix = GitWorkspace.GetStatusMatrix(root, git);
-var batch = new GitWorkspaceBatch(git);
-await batch.FetchAsync(GitWorkspace.SelectByNames(GitWorkspace.Discover(root), null),
-    new BatchOptions { WorkspaceRoot = root });
+var root = CheckoutRoot.Resolve();
+var forest = MultiGitRepositoryWorkspace.Discover(root);
+var matrix = git.GetStatusMatrix(forest);
+var batch = new GitRepositoryBatch(git);
+await batch.FetchAsync(forest, new BatchOptions { WorkspaceRoot = root });
 ```
 
 ## Related

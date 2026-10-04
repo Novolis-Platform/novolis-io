@@ -1,18 +1,16 @@
 namespace Novolis.IO.Git;
 
-/// <summary>Periodic soft fetch across a workspace (host Start/Stop only).</summary>
+/// <summary>Periodic soft fetch across a checkout root (host Start/Stop only).</summary>
 public sealed class FetchScheduler : IAsyncDisposable
 {
-    readonly GitRepositoryService _git;
-    readonly GitWorkspaceBatch _batch;
+    readonly GitRepositoryBatch _batch;
     CancellationTokenSource? _cts;
     Task? _loop;
 
     /// <summary>Creates a scheduler.</summary>
     public FetchScheduler(GitRepositoryService? git = null)
     {
-        _git = git ?? new GitRepositoryService();
-        _batch = new GitWorkspaceBatch(_git);
+        _batch = new GitRepositoryBatch(git ?? new GitRepositoryService());
     }
 
     /// <summary>Raised after each cycle with the batch result.</summary>
@@ -25,17 +23,19 @@ public sealed class FetchScheduler : IAsyncDisposable
     public bool IsRunning => _loop is { IsCompleted: false };
 
     /// <summary>Starts periodic fetch.</summary>
-    /// <param name="workspaceRoot">Workspace root for discover + state.</param>
+    /// <param name="workspaceRoot">Checkout root for discover + state.</param>
     /// <param name="interval">Delay between cycles (and before the first when <paramref name="delayBeforeFirst"/>).</param>
     /// <param name="filter">Optional repo filter.</param>
     /// <param name="parallel">Max parallel fetch degree.</param>
     /// <param name="delayBeforeFirst">When true (default), wait <paramref name="interval"/> before the first cycle so UI startup is not contested.</param>
+    /// <param name="policy">Which children count as members. Default is every git child.</param>
     public void Start(
         string workspaceRoot,
         TimeSpan interval,
         RepoFilter? filter = null,
         int parallel = 6,
-        bool delayBeforeFirst = true)
+        bool delayBeforeFirst = true,
+        GitDiscover policy = GitDiscover.GitChildren)
     {
         Stop();
         _cts = new CancellationTokenSource();
@@ -58,8 +58,8 @@ public sealed class FetchScheduler : IAsyncDisposable
             {
                 try
                 {
-                    var repos = GitWorkspace.SelectByNames(GitWorkspace.Discover(workspaceRoot), filter);
-                    var result = await _batch.FetchAsync(repos, new BatchOptions
+                    var forest = MultiGitRepositoryWorkspace.Discover(workspaceRoot, policy).Select(filter);
+                    var result = await _batch.FetchAsync(forest, new BatchOptions
                     {
                         Parallel = parallel,
                         WorkspaceRoot = workspaceRoot,

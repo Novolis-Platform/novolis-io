@@ -1,24 +1,36 @@
 namespace Novolis.IO.Git;
 
 /// <summary>Parallel fetch / pull / checkout across repos.</summary>
-public sealed class GitWorkspaceBatch
+public sealed class GitRepositoryBatch
 {
     readonly GitRepositoryService _git;
 
     /// <summary>Creates a batch runner.</summary>
-    public GitWorkspaceBatch(GitRepositoryService? git = null)
+    public GitRepositoryBatch(GitRepositoryService? git = null)
     {
         _git = git ?? new GitRepositoryService();
     }
 
     /// <summary>Fetches many repos (no merge).</summary>
+    public Task<BatchResult> FetchAsync(
+        MultiGitRepositoryWorkspace forest,
+        BatchOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(forest);
+        options ??= new BatchOptions();
+        options = WithRoot(options, forest.Root.FullName);
+        return FetchAsync(forest.Members, options, cancellationToken);
+    }
+
+    /// <summary>Fetches many repos (no merge).</summary>
     public async Task<BatchResult> FetchAsync(
-        IReadOnlyList<RepoEntry> repos,
+        IReadOnlyList<GitRepositoryWorkspace> repos,
         BatchOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         options ??= new BatchOptions();
-        return await RunAsync(repos, options, exclusive: false, async (repo, ct) =>
+        return await RunAsync(repos, options, exclusive: false, async (repo, _) =>
         {
             if (options.DryRun)
             {
@@ -31,30 +43,32 @@ public sealed class GitWorkspaceBatch
                 };
             }
 
-            var r = _git.Fetch(repo.Path);
+            var path = repo.Root.FullName;
+            var r = _git.Fetch(path);
             if (r.Ok && options.WorkspaceRoot is not null)
-                RepoStateStore.Load(options.WorkspaceRoot).SetLastFetch(repo.Name, DateTimeOffset.UtcNow);
+                RepoStateStore.Load(options.WorkspaceRoot).SetLastFetch(repo.RepositoryName, DateTimeOffset.UtcNow);
             return new BatchRepoResult
             {
                 Repo = repo,
                 Outcome = r.Ok ? "ok" : "failed",
                 Message = r.Message,
             };
-        }, cancellationToken);
+        }, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Fast-forward pull many repos.</summary>
     public Task<BatchResult> PullFfOnlyAsync(
-        IReadOnlyList<RepoEntry> repos,
+        IReadOnlyList<GitRepositoryWorkspace> repos,
         BatchOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         options ??= new BatchOptions();
-        return RunAsync(repos, options, exclusive: true, (repo, ct) =>
+        return RunAsync(repos, options, exclusive: true, (repo, _) =>
         {
+            var path = repo.Root.FullName;
             if (options.SkipDirty)
             {
-                var status = _git.GetStatus(repo.Path);
+                var status = _git.GetStatus(path);
                 if (status.Dirty)
                 {
                     return Task.FromResult(new BatchRepoResult
@@ -77,7 +91,7 @@ public sealed class GitWorkspaceBatch
                 });
             }
 
-            var r = _git.PullFfOnly(repo.Path, new PullOptions { FfOnly = true });
+            var r = _git.PullFfOnly(path, new PullOptions { FfOnly = true });
             return Task.FromResult(new BatchRepoResult
             {
                 Repo = repo,
@@ -89,17 +103,18 @@ public sealed class GitWorkspaceBatch
 
     /// <summary>Checkout the same ref across repos.</summary>
     public Task<BatchResult> CheckoutAsync(
-        IReadOnlyList<RepoEntry> repos,
+        IReadOnlyList<GitRepositoryWorkspace> repos,
         string refName,
         BatchOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         options ??= new BatchOptions();
-        return RunAsync(repos, options, exclusive: true, (repo, ct) =>
+        return RunAsync(repos, options, exclusive: true, (repo, _) =>
         {
+            var path = repo.Root.FullName;
             if (options.SkipDirty)
             {
-                var status = _git.GetStatus(repo.Path);
+                var status = _git.GetStatus(path);
                 if (status.Dirty)
                 {
                     return Task.FromResult(new BatchRepoResult
@@ -122,7 +137,7 @@ public sealed class GitWorkspaceBatch
                 });
             }
 
-            var r = _git.Checkout(repo.Path, refName);
+            var r = _git.Checkout(path, refName);
             return Task.FromResult(new BatchRepoResult
             {
                 Repo = repo,
@@ -133,10 +148,10 @@ public sealed class GitWorkspaceBatch
     }
 
     async Task<BatchResult> RunAsync(
-        IReadOnlyList<RepoEntry> repos,
+        IReadOnlyList<GitRepositoryWorkspace> repos,
         BatchOptions options,
         bool exclusive,
-        Func<RepoEntry, CancellationToken, Task<BatchRepoResult>> work,
+        Func<GitRepositoryWorkspace, CancellationToken, Task<BatchRepoResult>> work,
         CancellationToken cancellationToken)
     {
         var degree = Math.Clamp(options.Parallel, 1, 32);
@@ -151,8 +166,8 @@ public sealed class GitWorkspaceBatch
                 if (options.WorkspaceRoot is not null)
                 {
                     lockHandle = exclusive
-                        ? RepoLock.TryAcquireExclusive(options.WorkspaceRoot, repo.Name)
-                        : RepoLock.TryAcquireShared(options.WorkspaceRoot, repo.Name);
+                        ? RepoLock.TryAcquireExclusive(options.WorkspaceRoot, repo.RepositoryName)
+                        : RepoLock.TryAcquireShared(options.WorkspaceRoot, repo.RepositoryName);
                     if (lockHandle is null)
                     {
                         return new BatchRepoResult
@@ -185,4 +200,15 @@ public sealed class GitWorkspaceBatch
         var results = await Task.WhenAll(tasks).ConfigureAwait(false);
         return new BatchResult { Results = results };
     }
+
+    static BatchOptions WithRoot(BatchOptions options, string root) =>
+        options.WorkspaceRoot is null
+            ? new BatchOptions
+            {
+                Parallel = options.Parallel,
+                SkipDirty = options.SkipDirty,
+                DryRun = options.DryRun,
+                WorkspaceRoot = root,
+            }
+            : options;
 }

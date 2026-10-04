@@ -1,12 +1,12 @@
-﻿namespace Novolis.IO.Git;
+namespace Novolis.IO.Git;
 
-/// <summary>Aggregate counts.</summary>
-public sealed class WorkspaceStatusSummary
+/// <summary>Aggregate counts for a status probe.</summary>
+public sealed class GitStatusSummary
 {
     /// <summary>Total repos listed.</summary>
     public int Total { get; init; }
 
-    /// <summary>Git repos.</summary>
+    /// <summary>Repos that returned status.</summary>
     public int Git { get; init; }
 
     /// <summary>Dirty.</summary>
