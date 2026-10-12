@@ -4,9 +4,11 @@ namespace Novolis.IO.Platform.Android;
 
 /// <summary>
 /// Default on-device directories for a Novolis Android app.
-/// Prefers <c>Documents/Novolis/{product}</c> so the phone Files app and
-/// <c>adb pull</c> see the same tree. Falls back to app-specific external files
-/// when scoped storage will not grant a normal directory there.
+/// Prefers <c>Documents/Novolis/{product}</c> for the default shared policy so
+/// the phone Files app and <c>adb pull</c> see the same tree. Falls back to
+/// app-specific external files when scoped storage will not grant a normal
+/// directory there. Products can request <see cref="AndroidStoragePreference.AppPrivate"/>
+/// when their live files must be directly readable by the app.
 /// </summary>
 public static class AndroidAppStorage
 {
@@ -21,7 +23,7 @@ public static class AndroidAppStorage
 #if ANDROID
         var context = global::Android.App.Application.Context
             ?? throw new InvalidOperationException("Android Application.Context is not available.");
-        return Open(context, productName);
+        return Open(context, productName, AndroidStoragePreference.SharedDocuments);
 #else
         _ = productName;
         throw new PlatformNotSupportedException("AndroidAppStorage.Open requires net10.0-android.");
@@ -34,26 +36,41 @@ public static class AndroidAppStorage
 #if ANDROID
     /// <summary>Resolves and creates the default directories for <paramref name="context"/>.</summary>
     public static AndroidAppLocations Open(global::Android.Content.Context context, string productName)
+        => Open(context, productName, AndroidStoragePreference.SharedDocuments);
+
+    /// <summary>
+    /// Resolves and creates the default directories using the requested storage policy.
+    /// </summary>
+    public static AndroidAppLocations Open(
+        global::Android.Content.Context context,
+        string productName,
+        AndroidStoragePreference preference)
     {
         ArgumentNullException.ThrowIfNull(context);
         var product = AndroidStorageLayout.SanitizeProductName(productName);
+        var cacheKey = $"{preference}:{product}";
         lock (Gate)
         {
-            if (Cache.TryGetValue(product, out var existing))
+            if (Cache.TryGetValue(cacheKey, out var existing))
                 return existing;
 
-            var created = Resolve(context, product);
-            Cache[product] = created;
+            var created = Resolve(context, product, preference);
+            Cache[cacheKey] = created;
             Debug.WriteLine($"Novolis Android storage ({created.Kind}): {created.RootDirectory}");
             Debug.WriteLine(AndroidStorageLayout.DescribeForAdb(created));
             return created;
         }
     }
 
-    static AndroidAppLocations Resolve(global::Android.Content.Context context, string product)
+    static AndroidAppLocations Resolve(
+        global::Android.Content.Context context,
+        string product,
+        AndroidStoragePreference preference)
     {
         var externalRoot = ExternalFilesRoot(context, product);
-        var sharedRoot = TryClaimSharedDocuments(context, product);
+        var sharedRoot = preference == AndroidStoragePreference.SharedDocuments
+            ? TryClaimSharedDocuments(context, product)
+            : null;
 
         string root;
         AndroidStorageKind kind;
@@ -61,6 +78,13 @@ public static class AndroidAppStorage
         {
             root = sharedRoot;
             kind = AndroidStorageKind.SharedDocuments;
+        }
+        else if (preference == AndroidStoragePreference.AppPrivate)
+        {
+            var files = context.FilesDir?.AbsolutePath
+                ?? throw new InvalidOperationException("Context.FilesDir is null.");
+            root = AndroidStorageLayout.UnderOrganization(files, product);
+            kind = AndroidStorageKind.Internal;
         }
         else if (externalRoot is not null)
         {
@@ -87,6 +111,9 @@ public static class AndroidAppStorage
         if (externalRoot is not null)
             AndroidStorageMigration.MoveLegacyTree(externalRoot, root);
 
+        var importResult = preference == AndroidStoragePreference.AppPrivate
+            ? AndroidMediaStoreImport.Import(context, product, root)
+            : new AndroidStorageImportResult(0, null);
         var workspace = AndroidStorageLayout.Workspace(root);
         Directory.CreateDirectory(workspace);
         var cache = CacheRoot(context, product);
@@ -97,7 +124,8 @@ public static class AndroidAppStorage
             root,
             workspace,
             cache,
-            context.PackageName);
+            context.PackageName,
+            importResult);
     }
 
     static string? ExternalFilesRoot(global::Android.Content.Context context, string product)

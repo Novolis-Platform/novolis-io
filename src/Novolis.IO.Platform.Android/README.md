@@ -20,6 +20,11 @@ Existing trees under the old internal `files/{product}` directory are moved onto
 
 Logcat on a debug build prints the resolved path and the matching adb command.
 
+Products that need uninterrupted direct file access can opt into
+`AndroidStoragePreference.AppPrivate`. On first resolution, readable legacy
+files under the shared Documents product tree are copied into the app-owned
+root, including files exposed only through the product's MediaStore rows.
+
 ## Install
 
 ```bash

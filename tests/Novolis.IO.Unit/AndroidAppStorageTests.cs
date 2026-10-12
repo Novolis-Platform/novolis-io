@@ -58,6 +58,16 @@ public sealed class AndroidAppStorageTests
     }
 
     [Test]
+    public async Task Import_result_reports_copied_files()
+    {
+        var result = new AndroidStorageImportResult(3, null);
+
+        await Assert.That(result.Attempted).IsTrue();
+        await Assert.That(result.FilesCopied).IsEqualTo(3);
+        await Assert.That(result.ErrorMessage).IsNull();
+    }
+
+    [Test]
     public async Task MoveLegacyTree_MovesPayloadAndLeavesExistingDestination()
     {
         var scratch = Path.Combine(Path.GetTempPath(), "novolis-android-storage-" + Guid.NewGuid().ToString("N"));

@@ -10,7 +10,8 @@ public sealed class AndroidAppLocations
         string rootDirectory,
         string workspaceDirectory,
         string cacheDirectory,
-        string? applicationId = null)
+        string? applicationId = null,
+        AndroidStorageImportResult? importResult = null)
     {
         ProductName = AndroidStorageLayout.SanitizeProductName(productName);
         Kind = kind;
@@ -18,6 +19,7 @@ public sealed class AndroidAppLocations
         WorkspaceDirectory = workspaceDirectory ?? throw new ArgumentNullException(nameof(workspaceDirectory));
         CacheDirectory = cacheDirectory ?? throw new ArgumentNullException(nameof(cacheDirectory));
         ApplicationId = string.IsNullOrWhiteSpace(applicationId) ? null : applicationId.Trim();
+        ImportResult = importResult ?? new AndroidStorageImportResult(0, null);
     }
 
     /// <summary>Sanitized product folder name.</summary>
@@ -37,4 +39,7 @@ public sealed class AndroidAppLocations
 
     /// <summary>Android package name when resolved on device.</summary>
     public string? ApplicationId { get; }
+
+    /// <summary>Result of importing a legacy shared tree, when app-private storage is used.</summary>
+    public AndroidStorageImportResult ImportResult { get; }
 }
