@@ -17,7 +17,9 @@ device-specific report interpretation to the host.
 dotnet add package Novolis.IO.ConnectedDevices
 ```
 
-## Enumerate devices
+## Usage
+
+### Enumerate devices
 
 ```csharp
 using Novolis.IO.ConnectedDevices;
