@@ -319,15 +319,20 @@ internal sealed class WindowsSystemMetricsProvider : PlatformSystemMetricsProvid
             : deviceId.Substring(index + marker.Length, 4);
     }
 
-    private static long? ReadRegistryLong(object? value) =>
-        value switch
+    private static long? ReadRegistryLong(object? value)
+    {
+        var number = value switch
         {
-            long number => number,
-            int number => number,
+            long longNumber => longNumber,
+            int intNumber => (long)intNumber,
             byte[] bytes when bytes.Length >= sizeof(long) =>
                 BitConverter.ToInt64(bytes, 0),
-            _ => null,
+            byte[] bytes when bytes.Length >= sizeof(int) =>
+                BitConverter.ToInt32(bytes, 0),
+            _ => (long?)null,
         };
+        return number is >= 0 ? number : null;
+    }
 
     private static long? ToNullableLong(ulong value) =>
         value <= long.MaxValue ? (long)value : null;
