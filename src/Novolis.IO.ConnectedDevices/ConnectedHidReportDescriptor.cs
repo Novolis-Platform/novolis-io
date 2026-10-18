@@ -39,11 +39,20 @@ public sealed record ConnectedHidReportDescriptor
     public IReadOnlyList<ConnectedHidReport> InputReports { get; init; } =
         Array.Empty<ConnectedHidReport>();
 
+    /// <summary>
+    /// All output reports declared by the interface.
+    /// </summary>
+    public IReadOnlyList<ConnectedHidReport> OutputReports { get; init; } =
+        Array.Empty<ConnectedHidReport>();
+
     internal static ConnectedHidReportDescriptor FromNative(ReportDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
 
         var inputReports = descriptor.InputReports
+            .Select(FromNative)
+            .ToArray();
+        var outputReports = descriptor.OutputReports
             .Select(FromNative)
             .ToArray();
         var collections = descriptor.DeviceItems
@@ -53,6 +62,9 @@ public sealed record ConnectedHidReportDescriptor
                     CollectionType = item.CollectionType.ToString(),
                     Usages = item.Usages.GetAllValues().ToArray(),
                     InputReports = item.InputReports
+                        .Select(FromNative)
+                        .ToArray(),
+                    OutputReports = item.OutputReports
                         .Select(FromNative)
                         .ToArray(),
                 })
@@ -66,6 +78,7 @@ public sealed record ConnectedHidReportDescriptor
             MaxFeatureReportLength = descriptor.MaxFeatureReportLength,
             Collections = collections,
             InputReports = inputReports,
+            OutputReports = outputReports,
         };
     }
 

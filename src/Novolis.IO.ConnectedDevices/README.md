@@ -97,9 +97,13 @@ else
 
 `WebHubMacroPadSession` supports read-only device/configuration reads and
 explicit action, profile, and backlight writes for interfaces with the
-documented 64-byte report shape. `WebHubMacroPad.ProbeReadOnly()` can safely
-inspect a mismatched interface without enabling writes. The API deliberately
-does not expose factory-reset or bootloader commands.
+documented 64-byte report shape. `WebHubMacroPadAction.Description` provides an
+operator-facing interpretation of the four bytes, and
+`WebHubMacroPadPresets.CreateUsefulKnobActions()` supplies a starting map with
+counter-clockwise volume down, clockwise volume up, and useful media/workspace
+press actions. `WebHubMacroPad.ProbeReadOnly()` can safely inspect a mismatched
+interface without enabling writes. The API deliberately does not expose
+factory-reset or bootloader commands.
 
 ## Hot-plug changes
 

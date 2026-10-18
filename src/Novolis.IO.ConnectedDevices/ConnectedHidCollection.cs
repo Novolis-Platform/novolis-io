@@ -20,4 +20,10 @@ public sealed record ConnectedHidCollection
     /// </summary>
     public IReadOnlyList<ConnectedHidReport> InputReports { get; init; } =
         Array.Empty<ConnectedHidReport>();
+
+    /// <summary>
+    /// Output reports belonging to this collection.
+    /// </summary>
+    public IReadOnlyList<ConnectedHidReport> OutputReports { get; init; } =
+        Array.Empty<ConnectedHidReport>();
 }

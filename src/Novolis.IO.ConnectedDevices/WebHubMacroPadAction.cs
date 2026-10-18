@@ -37,6 +37,11 @@ public readonly record struct WebHubMacroPadAction(
     public byte[] ToByteArray() => [ (byte)Type, Parameter1, Parameter2, Parameter3 ];
 
     /// <summary>
+    /// A human-readable interpretation of this action.
+    /// </summary>
+    public string Description => WebHubMacroPadActionDescriptions.Describe(this);
+
+    /// <summary>
     /// Creates an action from a four-byte firmware record.
     /// </summary>
     public static WebHubMacroPadAction FromBytes(ReadOnlySpan<byte> bytes)
@@ -49,17 +54,5 @@ public readonly record struct WebHubMacroPadAction(
         return new((WebHubMacroPadActionType)bytes[0], bytes[1], bytes[2], bytes[3]);
     }
 
-    public override string ToString() =>
-        Type switch
-        {
-            WebHubMacroPadActionType.Disabled => "Disabled",
-            WebHubMacroPadActionType.Keyboard => $"Keyboard 0x{Parameter2:X2} (mod 0x{Parameter1:X2})",
-            WebHubMacroPadActionType.Media => $"Media 0x{Parameter2:X2}{Parameter1:X2}",
-            WebHubMacroPadActionType.MouseButton => $"Mouse button 0x{Parameter3:X2}{Parameter2:X2}{Parameter1:X2}",
-            WebHubMacroPadActionType.MouseMove => $"Mouse move {Parameter1:X2}/{Parameter2:X2}/{Parameter3:X2}",
-            WebHubMacroPadActionType.Power => $"Power 0x{Parameter1:X2}",
-            WebHubMacroPadActionType.Macro => $"Macro {Parameter1} (repeat {Parameter2})",
-            WebHubMacroPadActionType.OpenWebsite => $"Website {Parameter1:X2} {Parameter2:X2} {Parameter3:X2}",
-            _ => $"Type 0x{(byte)Type:X2} {Parameter1:X2} {Parameter2:X2} {Parameter3:X2}",
-        };
+    public override string ToString() => Description;
 }

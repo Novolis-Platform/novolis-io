@@ -68,6 +68,29 @@ public sealed class ConnectedDevicesTests
     }
 
     [Test]
+    public async Task Macro_pad_media_action_has_a_friendly_description()
+    {
+        var action = WebHubMacroPadAction.Media(0x00E9);
+
+        await Assert.That(action.Description).IsEqualTo("Media: Volume up");
+        await Assert.That(
+            WebHubMacroPadActionDescriptions.DescribeParameters(action))
+            .Contains("consumerUsage=0x00E9");
+    }
+
+    [Test]
+    public async Task Useful_knob_preset_fixes_volume_direction_and_mute_press()
+    {
+        var actions = WebHubMacroPadPresets.CreateUsefulKnobActions();
+
+        await Assert.That(actions.Count).IsEqualTo(9);
+        await Assert.That(actions[0].Description).IsEqualTo("Media: Play / pause");
+        await Assert.That(actions[1].Description).IsEqualTo("Media: Volume up");
+        await Assert.That(actions[2].Description).IsEqualTo("Media: Volume down");
+        await Assert.That(actions[6].Description).Contains("Alt + Tab");
+    }
+
+    [Test]
     public async Task Macro_pad_target_uses_the_full_size_4x4_hardware_id()
     {
         var filter = new ConnectedDeviceFilter
