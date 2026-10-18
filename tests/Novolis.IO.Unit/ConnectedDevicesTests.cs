@@ -116,15 +116,24 @@ public sealed class ConnectedDevicesTests
     }
 
     [Test]
-    public async Task Factory_keytron_preset_has_twenty_five_useful_slots()
+    public async Task Factory_keytron_preset_has_safe_test_slots()
     {
         var actions = KeytronLegacyPresets.CreateUsefulMap();
 
         await Assert.That(actions.Count).IsEqualTo(25);
+        await Assert.That(actions[11].Description).IsEqualTo("Keyboard: F24");
+        await Assert.That(actions[12].Description).IsEqualTo("Media: Play / pause");
+        await Assert.That(actions[15].Description).IsEqualTo("Media: Mute");
         await Assert.That(actions[16].Description).IsEqualTo("Media: Play / pause");
         await Assert.That(actions[17].Description).IsEqualTo("Media: Volume down");
         await Assert.That(actions[18].Description).IsEqualTo("Media: Volume up");
-        await Assert.That(actions[22].Description).Contains("Alt + Tab");
+        await Assert.That(actions[22].Description).IsEqualTo("Media: Mute");
+        await Assert.That(actions.Select(
+            (action, index) =>
+                index < 12
+                    ? action.Type == KeytronLegacyActionType.Keyboard
+                    : action.Type == KeytronLegacyActionType.Consumer)
+            .All(isExpectedType => isExpectedType)).IsTrue();
     }
 
     private static ConnectedDeviceDescriptor CreateDescriptor() =>

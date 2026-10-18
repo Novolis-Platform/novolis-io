@@ -6,14 +6,15 @@ namespace Novolis.IO.ConnectedDevices;
 public static class KeytronLegacyPresets
 {
     /// <summary>
-    /// Creates a safe, useful 25-slot map for 16 keys and three knobs.
+    /// Creates a safe 25-slot test map for 16 keys and three knobs.
     /// </summary>
     /// <remarks>
-    /// The first twelve keys become F13–F24, avoiding the factory Ctrl+A
-    /// mapping while leaving those keys easy to bind in Windows applications.
-    /// Knob direction is intentionally swapped from the attached unit's
-    /// inverted volume behavior: clockwise is volume down and counter-clockwise
-    /// is volume up. No firmware-update or reset action is included.
+    /// The first twelve keys become F13–F24, avoiding ordinary text entry and
+    /// application shortcuts. The remaining four keys and every knob action
+    /// use consumer/media controls only. Knob direction is intentionally
+    /// swapped from the attached unit's inverted volume behavior: clockwise
+    /// is volume down and counter-clockwise is volume up. No firmware-update
+    /// or reset action is included.
     /// </remarks>
     public static IReadOnlyList<KeytronLegacyAction> CreateUsefulMap()
     {
@@ -24,10 +25,11 @@ public static class KeytronLegacyPresets
             actions.Add(KeytronLegacyAction.Keyboard(0, (byte)usage));
         }
 
-        actions.Add(KeytronLegacyAction.Keyboard(0, 0x28)); // Enter
-        actions.Add(KeytronLegacyAction.Keyboard(0x01, 0x2C)); // Ctrl+Space
-        actions.Add(KeytronLegacyAction.Keyboard(0x01, 0x2B)); // Ctrl+Tab
-        actions.Add(KeytronLegacyAction.Keyboard(0x03, 0x2B)); // Ctrl+Shift+Tab
+        // Keys 13–16: consumer controls rather than keyboard shortcuts.
+        actions.Add(KeytronLegacyAction.Consumer(0x00CD)); // Play/pause
+        actions.Add(KeytronLegacyAction.Consumer(0x00B5)); // Next track
+        actions.Add(KeytronLegacyAction.Consumer(0x00B6)); // Previous track
+        actions.Add(KeytronLegacyAction.Consumer(0x00E2)); // Mute
 
         actions.AddRange(
         [
@@ -41,10 +43,10 @@ public static class KeytronLegacyPresets
             KeytronLegacyAction.Consumer(0x0070),
             KeytronLegacyAction.Consumer(0x006F),
 
-            // Knob 3: window and browser-tab navigation.
-            KeytronLegacyAction.Keyboard(0x04, 0x2B), // Alt+Tab
-            KeytronLegacyAction.Keyboard(0x01, 0x2B), // Ctrl+Tab
-            KeytronLegacyAction.Keyboard(0x03, 0x2B), // Ctrl+Shift+Tab
+            // Knob 3: consumer controls only.
+            KeytronLegacyAction.Consumer(0x00E2), // Mute
+            KeytronLegacyAction.Consumer(0x00B6), // Previous track
+            KeytronLegacyAction.Consumer(0x00B5), // Next track
         ]);
 
         return actions;
