@@ -116,6 +116,17 @@ public sealed class ConnectedDevicesTests
     }
 
     [Test]
+    public async Task Factory_keytron_action_bytes_have_meaningful_names()
+    {
+        var action = KeytronLegacyAction.Consumer(0x00E9);
+
+        await Assert.That(KeytronLegacyActionDescriptions.DescribeType(action.Type))
+            .Contains("Consumer/media control");
+        await Assert.That(KeytronLegacyActionDescriptions.DescribeParameters(action))
+            .Contains("consumerUsage=0x00E9");
+    }
+
+    [Test]
     public async Task Factory_keytron_preset_has_safe_test_slots()
     {
         var actions = KeytronLegacyPresets.CreateUsefulMap();
@@ -146,6 +157,10 @@ public sealed class ConnectedDevicesTests
         await Assert.That(copy.Red).IsEqualTo((byte)0xFF);
         await Assert.That(copy.Green).IsEqualTo((byte)0x00);
         await Assert.That(copy.Blue).IsEqualTo((byte)0x00);
+        await Assert.That(settings.EffectMode).IsEqualTo(settings.Mode);
+        await Assert.That(settings.MasterBrightness).IsEqualTo(settings.Brightness);
+        await Assert.That(settings.AnimationSpeed).IsEqualTo(settings.Speed);
+        await Assert.That(settings.UseCustomColor).IsEqualTo(settings.Custom);
     }
 
     private static ConnectedDeviceDescriptor CreateDescriptor() =>

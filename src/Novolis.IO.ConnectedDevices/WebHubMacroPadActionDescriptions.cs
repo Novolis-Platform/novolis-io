@@ -6,6 +6,31 @@ namespace Novolis.IO.ConnectedDevices;
 public static class WebHubMacroPadActionDescriptions
 {
     /// <summary>
+    /// Gives the protocol action byte a meaningful operator-facing name.
+    /// </summary>
+    public static string DescribeType(WebHubMacroPadActionType type) =>
+        type switch
+        {
+            WebHubMacroPadActionType.Disabled =>
+                "Disabled — no output (0x13)",
+            WebHubMacroPadActionType.Keyboard =>
+                "Keyboard key — modifier mask + usage (0x20)",
+            WebHubMacroPadActionType.Media =>
+                "Consumer/media control — little-endian usage (0x30)",
+            WebHubMacroPadActionType.MouseButton =>
+                "Mouse button — button mask (0x10)",
+            WebHubMacroPadActionType.MouseMove =>
+                "Mouse movement — X/Y/wheel deltas (0x11)",
+            WebHubMacroPadActionType.Power =>
+                "Power/system control (0x40)",
+            WebHubMacroPadActionType.Macro =>
+                "Stored macro — index/repeat (0x60)",
+            WebHubMacroPadActionType.OpenWebsite =>
+                "Open website — URL reference bytes (0x80)",
+            _ => $"Unknown WebHub action type (0x{(byte)type:X2})",
+        };
+
+    /// <summary>
     /// Describes one four-byte action record without hiding its unknown values.
     /// </summary>
     public static string Describe(WebHubMacroPadAction action) =>
@@ -37,21 +62,29 @@ public static class WebHubMacroPadActionDescriptions
         action.Type switch
         {
             WebHubMacroPadActionType.Keyboard =>
-                $"modifier=0x{action.Parameter1:X2}, usage=0x{action.Parameter2:X2}",
+                $"modifierFlags=0x{action.Parameter1:X2}, " +
+                $"keyboardUsage=0x{action.Parameter2:X2}",
             WebHubMacroPadActionType.Media =>
                 $"consumerUsage=0x{action.Parameter2:X2}{action.Parameter1:X2}",
             WebHubMacroPadActionType.MouseButton =>
-                $"buttonMask=0x{action.Parameter3:X2}{action.Parameter2:X2}{action.Parameter1:X2}",
+                $"mouseButtonMask=0x{action.Parameter3:X2}{action.Parameter2:X2}{action.Parameter1:X2}",
             WebHubMacroPadActionType.MouseMove =>
-                $"x=0x{action.Parameter1:X2}, y=0x{action.Parameter2:X2}, wheel=0x{action.Parameter3:X2}",
+                $"mouseDeltaX=0x{action.Parameter1:X2}, " +
+                $"mouseDeltaY=0x{action.Parameter2:X2}, " +
+                $"wheelDelta=0x{action.Parameter3:X2}",
             WebHubMacroPadActionType.Power =>
-                $"powerCode=0x{action.Parameter1:X2}",
+                $"powerSystemCode=0x{action.Parameter1:X2}",
             WebHubMacroPadActionType.Macro =>
-                $"macro=0x{action.Parameter1:X2}, repeat=0x{action.Parameter2:X2}, extra=0x{action.Parameter3:X2}",
+                $"macroIndex=0x{action.Parameter1:X2}, " +
+                $"repeatCount=0x{action.Parameter2:X2}, " +
+                $"extraMacroByte=0x{action.Parameter3:X2}",
             WebHubMacroPadActionType.OpenWebsite =>
-                $"urlBytes={action.Parameter1:X2} {action.Parameter2:X2} {action.Parameter3:X2}",
+                $"urlReferenceBytes={action.Parameter1:X2} " +
+                $"{action.Parameter2:X2} {action.Parameter3:X2}",
             _ =>
-                $"p1=0x{action.Parameter1:X2}, p2=0x{action.Parameter2:X2}, p3=0x{action.Parameter3:X2}",
+                $"unknownByte1=0x{action.Parameter1:X2}, " +
+                $"unknownByte2=0x{action.Parameter2:X2}, " +
+                $"unknownByte3=0x{action.Parameter3:X2}",
         };
 
     private static string DescribeMedia(ushort usage) =>

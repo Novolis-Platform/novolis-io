@@ -6,6 +6,27 @@ namespace Novolis.IO.ConnectedDevices;
 public static class KeytronLegacyActionDescriptions
 {
     /// <summary>
+    /// Gives the factory action type a meaningful operator-facing name while
+    /// retaining the numeric type code for unknown firmware values.
+    /// </summary>
+    public static string DescribeType(KeytronLegacyActionType type) =>
+        type switch
+        {
+            KeytronLegacyActionType.Disabled => "Disabled — no output (0x00)",
+            KeytronLegacyActionType.BareKeyboard =>
+                "Keyboard usage — legacy bare key (0x01)",
+            KeytronLegacyActionType.Keyboard =>
+                "Keyboard usage + modifier mask (0x02)",
+            KeytronLegacyActionType.Consumer =>
+                "Consumer/media control (0x03)",
+            KeytronLegacyActionType.Mouse =>
+                "Mouse action (0x04)",
+            KeytronLegacyActionType.System =>
+                "System-control usage (0x05)",
+            _ => $"Unknown factory action type (0x{(byte)type:X2})",
+        };
+
+    /// <summary>
     /// Describes one action while retaining unknown type and byte values.
     /// </summary>
     public static string Describe(KeytronLegacyAction action) =>
@@ -24,6 +45,30 @@ public static class KeytronLegacyActionDescriptions
             _ =>
                 $"Type 0x{(byte)action.Type:X2}: " +
                 $"{action.Parameter1:X2} {action.Parameter2:X2}",
+        };
+
+    /// <summary>
+    /// Names the two type-specific bytes instead of presenting them as
+    /// unexplained parameter numbers.
+    /// </summary>
+    public static string DescribeParameters(KeytronLegacyAction action) =>
+        action.Type switch
+        {
+            KeytronLegacyActionType.Disabled =>
+                $"unused1=0x{action.Parameter1:X2}, unused2=0x{action.Parameter2:X2}",
+            KeytronLegacyActionType.BareKeyboard or KeytronLegacyActionType.Keyboard =>
+                $"modifierMask=0x{action.Parameter1:X2}, " +
+                $"keyboardUsage=0x{action.Parameter2:X2}",
+            KeytronLegacyActionType.Consumer =>
+                $"consumerUsage=0x{action.Parameter2:X2}{action.Parameter1:X2}",
+            KeytronLegacyActionType.Mouse =>
+                $"mouseByte1=0x{action.Parameter1:X2}, " +
+                $"mouseByte2=0x{action.Parameter2:X2}",
+            KeytronLegacyActionType.System =>
+                $"systemUsage=0x{action.Parameter2:X2}{action.Parameter1:X2}",
+            _ =>
+                $"unknownByte1=0x{action.Parameter1:X2}, " +
+                $"unknownByte2=0x{action.Parameter2:X2}",
         };
 
     private static string DescribeModifiers(byte modifier)

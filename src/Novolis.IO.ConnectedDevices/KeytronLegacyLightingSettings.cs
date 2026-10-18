@@ -20,6 +20,42 @@ public readonly record struct KeytronLegacyLightingSettings(
     byte Value)
 {
     /// <summary>
+    /// The effect or pattern selector stored in the protocol's mode byte.
+    /// </summary>
+    public byte EffectMode => Mode;
+
+    /// <summary>
+    /// The master LED intensity, from 0 (off) through 255 (full).
+    /// </summary>
+    public byte MasterBrightness => Brightness;
+
+    /// <summary>
+    /// The animation speed byte used by dynamic effects.
+    /// </summary>
+    public byte AnimationSpeed => Speed;
+
+    /// <summary>
+    /// Whether the device should use the supplied HSV color instead of its
+    /// effect palette.
+    /// </summary>
+    public bool UseCustomColor => Custom;
+
+    /// <summary>
+    /// The custom color hue, scaled from 0 through 255.
+    /// </summary>
+    public byte ColorHue => Hue;
+
+    /// <summary>
+    /// The custom color saturation, scaled from 0 through 255.
+    /// </summary>
+    public byte ColorSaturation => Saturation;
+
+    /// <summary>
+    /// The custom color value/brightness, scaled from 0 through 255.
+    /// </summary>
+    public byte ColorValue => Value;
+
+    /// <summary>
     /// A conservative custom red setting useful for confirming that writes work.
     /// </summary>
     public static KeytronLegacyLightingSettings Default =>
