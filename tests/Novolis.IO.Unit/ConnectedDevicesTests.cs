@@ -136,6 +136,18 @@ public sealed class ConnectedDevicesTests
             .All(isExpectedType => isExpectedType)).IsTrue();
     }
 
+    [Test]
+    public async Task Factory_keytron_lighting_settings_preserve_rgb_color()
+    {
+        var settings = KeytronLegacyLightingSettings.FromRgb(0xFF, 0x00, 0x00);
+        var copy = settings.ToRgb();
+
+        await Assert.That(settings.ToCommandSettings().Length).IsEqualTo(13);
+        await Assert.That(copy.Red).IsEqualTo((byte)0xFF);
+        await Assert.That(copy.Green).IsEqualTo((byte)0x00);
+        await Assert.That(copy.Blue).IsEqualTo((byte)0x00);
+    }
+
     private static ConnectedDeviceDescriptor CreateDescriptor() =>
         new()
         {

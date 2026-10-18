@@ -105,6 +105,13 @@ press actions. `WebHubMacroPad.ProbeReadOnly()` can safely inspect a mismatched
 interface without enabling writes. The API deliberately does not expose
 factory-reset or bootloader commands.
 
+The exact factory-firmware `6D7D:DCFC` interface is handled by
+`KeytronLegacySession`. It supports the verified three-byte action table and
+the factory lighting mode command: mode, brightness, speed, custom-color flag,
+and HSV bytes are written as a 32-byte report-ID-2 transaction. Lighting
+responses are retained as raw reports because this firmware's read response
+does not echo the full setting record.
+
 ## Hot-plug changes
 
 ```csharp

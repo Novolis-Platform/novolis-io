@@ -21,6 +21,8 @@ public sealed class KeytronLegacySession : IDisposable
     private const int DefaultActionCount = 25;
     private const byte ReadVersionCommand = 0x01;
     private const byte ReadKeyMapCommand = 0x02;
+    private const byte ReadLightingCommand = 0x0A;
+    private const byte WriteLightingCommand = 0x0B;
     private const byte WriteKeyMapCommand = 0x82;
 
     private readonly HidStream _stream;
@@ -85,6 +87,42 @@ public sealed class KeytronLegacySession : IDisposable
             [ReadVersionCommand],
             timeout ?? TimeSpan.FromSeconds(2));
         return new KeytronLegacyDeviceInfo(
+            [ (byte)_inputReportId, .. response ]);
+    }
+
+    /// <summary>
+    /// Reads the factory lighting response without guessing at unsupported
+    /// animation values. The raw response is retained for diagnostics.
+    /// </summary>
+    public KeytronLegacyLightingResponse ReadLighting(TimeSpan? timeout = null)
+    {
+        var response = SendAndReceive(
+            [ReadLightingCommand],
+            timeout ?? TimeSpan.FromSeconds(2));
+        return new KeytronLegacyLightingResponse(
+            [ (byte)_inputReportId, .. response ]);
+    }
+
+    /// <summary>
+    /// Writes mode, brightness, speed, custom-color, and HSV settings.
+    /// </summary>
+    /// <remarks>
+    /// The device echoes the accepted settings in its response. Callers should
+    /// retain that response and use <see cref="KeytronLegacyLightingResponse.TryGetSettings"/>
+    /// for verification.
+    /// </remarks>
+    public KeytronLegacyLightingResponse WriteLighting(
+        KeytronLegacyLightingSettings settings,
+        TimeSpan? timeout = null)
+    {
+        var command = new byte[15];
+        command[0] = WriteLightingCommand;
+        command[1] = 0x0B;
+        settings.ToCommandSettings().CopyTo(command, 2);
+        var response = SendAndReceive(
+            command,
+            timeout ?? TimeSpan.FromSeconds(2));
+        return new KeytronLegacyLightingResponse(
             [ (byte)_inputReportId, .. response ]);
     }
 
