@@ -12,6 +12,7 @@ See [release-policy](https://github.com/Novolis-Platform/novolis-governance/blob
 - `Novolis.IO.Mobile.Android`
 - `Novolis.IO.Paths`
 - `Novolis.IO.Processes`
+- `Novolis.IO.SystemMetrics`
 - `Novolis.IO.Recovery`
 - `Novolis.IO.Watching`
 

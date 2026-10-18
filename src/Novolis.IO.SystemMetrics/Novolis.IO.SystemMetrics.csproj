@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Novolis.IO.SystemMetrics</PackageId>
+    <Description>Cross-platform system resource inventory and time-series metrics capture.</Description>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>Novolis.IO.SystemMetrics</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageTags>system;metrics;cpu;gpu;network;display;diagnostics;telemetry;novolis</PackageTags>
+  </PropertyGroup>
+</Project>

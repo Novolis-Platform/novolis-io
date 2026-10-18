@@ -22,6 +22,7 @@ Published docs: [https://novolis-platform.github.io/.github/novolis-io/](https:/
 | `Novolis.IO.Mobile.Android` |
 | `Novolis.IO.Paths` |
 | `Novolis.IO.Processes` |
+| `Novolis.IO.SystemMetrics` |
 | `Novolis.IO.Recovery` |
 | `Novolis.IO.Watching` |
 

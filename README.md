@@ -47,6 +47,7 @@
 | `Novolis.IO.Mobile.Android` | `dotnet add package Novolis.IO.Mobile.Android` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Mobile.Android/README.md) |
 | `Novolis.IO.Paths` | `dotnet add package Novolis.IO.Paths` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Paths/README.md) |
 | `Novolis.IO.Processes` | `dotnet add package Novolis.IO.Processes` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Processes/README.md) |
+| `Novolis.IO.SystemMetrics` | `dotnet add package Novolis.IO.SystemMetrics` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.SystemMetrics/README.md) |
 | `Novolis.IO.Recovery` | `dotnet add package Novolis.IO.Recovery` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Recovery/README.md) |
 | `Novolis.IO.Watching` | `dotnet add package Novolis.IO.Watching` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Watching/README.md) |
 
@@ -55,7 +56,7 @@ For NuGet.org and Visual Studio, the **embedded** README.md inside each package 
 <!-- novolis-package-index:end -->
 # novolis-io
 
-Small **I/O and tooling** libraries for Novolis apps: git/GitHub, paths, watching, recovery, process jobs, and host-side Android ADB.
+Small **I/O and tooling** libraries for Novolis apps: git/GitHub, paths, watching, recovery, process jobs, system metrics, and host-side Android ADB.
 
 ## Package docs
 
@@ -68,6 +69,7 @@ Small **I/O and tooling** libraries for Novolis apps: git/GitHub, paths, watchin
 | Watching | [src/Novolis.IO.Watching/README.md](src/Novolis.IO.Watching/README.md) |
 | Recovery | [src/Novolis.IO.Recovery/README.md](src/Novolis.IO.Recovery/README.md) |
 | Processes | [src/Novolis.IO.Processes/README.md](src/Novolis.IO.Processes/README.md) |
+| SystemMetrics | [src/Novolis.IO.SystemMetrics/README.md](src/Novolis.IO.SystemMetrics/README.md) |
 | Mobile.Android | [src/Novolis.IO.Mobile.Android/README.md](src/Novolis.IO.Mobile.Android/README.md) |
 | Workspace.Abstractions | [src/Novolis.IO.Workspace.Abstractions/README.md](src/Novolis.IO.Workspace.Abstractions/README.md) |
 | Workspace | [src/Novolis.IO.Workspace/README.md](src/Novolis.IO.Workspace/README.md) |
