@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Novolis.IO.ConnectedDevices</PackageId>
+    <Description>Cross-platform HID connected-device discovery and raw input streams.</Description>
+    <IsPackable>true</IsPackable>
+    <RootNamespace>Novolis.IO.ConnectedDevices</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageTags>hid;usb;keyboard;knob;input;devices;hardware;novolis</PackageTags>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="HidSharp" />
+  </ItemGroup>
+</Project>

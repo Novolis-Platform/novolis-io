@@ -14,6 +14,7 @@
     <ProjectReference Include="../../src/Novolis.IO.Processes/Novolis.IO.Processes.csproj" />
     <ProjectReference Include="../../src/Novolis.IO.SystemMetrics/Novolis.IO.SystemMetrics.csproj" />
     <ProjectReference Include="../../src/Novolis.IO.Paths/Novolis.IO.Paths.csproj" />
+    <ProjectReference Include="../../src/Novolis.IO.ConnectedDevices/Novolis.IO.ConnectedDevices.csproj" />
     <ProjectReference Include="../../src/Novolis.IO.Maps/Novolis.IO.Maps.csproj" />
     <ProjectReference Include="../../src/Novolis.IO.Indexing/Novolis.IO.Indexing.csproj" />
     <ProjectReference Include="../../src/Novolis.IO.Workspace/Novolis.IO.Workspace.csproj" />

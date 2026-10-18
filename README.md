@@ -47,6 +47,7 @@
 | `Novolis.IO.Mobile.Android` | `dotnet add package Novolis.IO.Mobile.Android` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Mobile.Android/README.md) |
 | `Novolis.IO.Paths` | `dotnet add package Novolis.IO.Paths` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Paths/README.md) |
 | `Novolis.IO.Processes` | `dotnet add package Novolis.IO.Processes` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Processes/README.md) |
+| `Novolis.IO.ConnectedDevices` | `dotnet add package Novolis.IO.ConnectedDevices` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.ConnectedDevices/README.md) |
 | `Novolis.IO.SystemMetrics` | `dotnet add package Novolis.IO.SystemMetrics` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.SystemMetrics/README.md) |
 | `Novolis.IO.Recovery` | `dotnet add package Novolis.IO.Recovery` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Recovery/README.md) |
 | `Novolis.IO.Watching` | `dotnet add package Novolis.IO.Watching` | [README](https://github.com/Novolis-Platform/novolis-io/blob/main/src/Novolis.IO.Watching/README.md) |
@@ -66,6 +67,7 @@ Small **I/O and tooling** libraries for Novolis apps: git/GitHub, paths, watchin
 | GitHub | [src/Novolis.IO.GitHub/README.md](src/Novolis.IO.GitHub/README.md) |
 | Indexing | [src/Novolis.IO.Indexing/README.md](src/Novolis.IO.Indexing/README.md) |
 | Paths | [src/Novolis.IO.Paths/README.md](src/Novolis.IO.Paths/README.md) |
+| ConnectedDevices | [src/Novolis.IO.ConnectedDevices/README.md](src/Novolis.IO.ConnectedDevices/README.md) |
 | Watching | [src/Novolis.IO.Watching/README.md](src/Novolis.IO.Watching/README.md) |
 | Recovery | [src/Novolis.IO.Recovery/README.md](src/Novolis.IO.Recovery/README.md) |
 | Processes | [src/Novolis.IO.Processes/README.md](src/Novolis.IO.Processes/README.md) |
