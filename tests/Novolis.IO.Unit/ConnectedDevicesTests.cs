@@ -105,6 +105,28 @@ public sealed class ConnectedDevicesTests
         await Assert.That(usages).Contains(0xFF000001u);
     }
 
+    [Test]
+    public async Task Factory_keytron_action_round_trips_three_bytes()
+    {
+        var action = KeytronLegacyAction.Keyboard(0x03, 0x2B);
+        var copy = KeytronLegacyAction.FromBytes(action.ToByteArray());
+
+        await Assert.That(copy).IsEqualTo(action);
+        await Assert.That(copy.Description).Contains("Ctrl + Shift + Tab");
+    }
+
+    [Test]
+    public async Task Factory_keytron_preset_has_twenty_five_useful_slots()
+    {
+        var actions = KeytronLegacyPresets.CreateUsefulMap();
+
+        await Assert.That(actions.Count).IsEqualTo(25);
+        await Assert.That(actions[16].Description).IsEqualTo("Media: Play / pause");
+        await Assert.That(actions[17].Description).IsEqualTo("Media: Volume down");
+        await Assert.That(actions[18].Description).IsEqualTo("Media: Volume up");
+        await Assert.That(actions[22].Description).Contains("Alt + Tab");
+    }
+
     private static ConnectedDeviceDescriptor CreateDescriptor() =>
         new()
         {

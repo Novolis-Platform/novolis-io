@@ -54,11 +54,50 @@ public sealed class WebHubMacroPad
     }
 
     /// <summary>
+    /// True when this is the factory-firmware interface: report ID 2 with
+    /// 32-byte input/output reports.
+    /// </summary>
+    public bool SupportsLegacyFrames
+    {
+        get
+        {
+            if (Device.Descriptor.MaxInputReportLength < 32
+                || Device.Descriptor.MaxOutputReportLength < 32)
+            {
+                return false;
+            }
+
+            try
+            {
+                var descriptor = Device.GetReportDescriptor();
+                var input = descriptor.InputReports.FirstOrDefault();
+                var output = descriptor.OutputReports.FirstOrDefault();
+                return descriptor.ReportsUseId
+                    && input?.ReportId == 2
+                    && output?.ReportId == 2
+                    && input.Length >= 32
+                    && output.Length >= 32;
+            }
+            catch (Exception exception) when (
+                exception is IOException
+                    or InvalidOperationException
+                    or NotSupportedException
+                    or ObjectDisposedException)
+            {
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
     /// Explains why the interface can or cannot use the WebHub session.
     /// </summary>
     public string ProtocolSupportDescription =>
         SupportsWebHubFrames
             ? "WebHub 64-byte configuration frames are available."
+            : SupportsLegacyFrames
+                ? "Factory-firmware 32-byte report-ID-2 action frames are available; " +
+                  "the action table can be backed up, rewritten, and read back."
             : $"This interface exposes {Device.Descriptor.MaxOutputReportLength}-byte output " +
               $"and {Device.Descriptor.MaxInputReportLength}-byte input reports; " +
               "the WebHub editor requires 64-byte report-id-free frames.";
@@ -148,4 +187,9 @@ public sealed class WebHubMacroPad
     /// Opens a session on the configuration interface.
     /// </summary>
     public WebHubMacroPadSession OpenSession() => new(Device);
+
+    /// <summary>
+    /// Opens a session for the known factory-firmware action-table protocol.
+    /// </summary>
+    public KeytronLegacySession OpenLegacySession() => new(Device);
 }
