@@ -24,7 +24,7 @@ public static partial class AndroidApkInspector
 
     private static readonly Regex SigningDigestRegex = new(
         @"(?im)\bcertificate\s+SHA-256\s+digest:\s*(?<digest>[0-9a-f: ]{8,})\s*$",
-        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
     /// Runs the Android SDK tools without opening a console window.
