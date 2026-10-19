@@ -740,6 +740,19 @@ public static partial class AndroidOutputRedactor
         };
     }
 
+    /// <summary>
+    /// Creates a shareable inventory while removing transport and hardware
+    /// identifiers from its device snapshot.
+    /// </summary>
+    public static AndroidDeviceInventory RedactInventory(AndroidDeviceInventory inventory)
+    {
+        ArgumentNullException.ThrowIfNull(inventory);
+        return inventory with
+        {
+            Device = RedactDeviceInfo(inventory.Device),
+        };
+    }
+
     private static string RedactIdentifier(string value) =>
         string.IsNullOrWhiteSpace(value) ? value : "[REDACTED]";
 
