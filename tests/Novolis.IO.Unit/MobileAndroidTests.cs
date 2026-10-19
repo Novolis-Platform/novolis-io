@@ -211,4 +211,19 @@ public sealed class MobileAndroidTests
             try { File.Delete(path); } catch { /* ignore */ }
         }
     }
+
+    [Test]
+    public async Task ApkInspector_NormalizesSigningFacts()
+    {
+        const string signing = """
+            Signer #1 certificate SHA-256 digest: AA:BB:CC:DD
+            """;
+
+        await Assert.That(
+                AndroidApkInspector.ParseSigningCertificateSha256(signing))
+            .IsEqualTo("AABBCCDD");
+        await Assert.That(
+                AndroidApkInspector.NormalizeCertificateDigest("aa-bb cc dd"))
+            .IsEqualTo("AABBCCDD");
+    }
 }

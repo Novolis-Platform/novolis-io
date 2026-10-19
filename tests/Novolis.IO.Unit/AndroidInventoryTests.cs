@@ -87,4 +87,36 @@ public sealed class AndroidInventoryTests
         await Assert.That(parsed.Values["global.device_provisioned"]).IsEqualTo("1");
         await Assert.That(parsed.Values["secure.backup_enabled"]).IsNull();
     }
+
+    [Test]
+    public async Task ParseNetwork_RetainsVpnAndDestinationFactsWithoutAddresses()
+    {
+        const string output = """
+            Active default network: 101
+              NetworkAgentInfo{ network{101} nc{[ Transports: WIFI Capabilities: INTERNET&VALIDATED&NOT_VPN ]} }
+              NetworkAgentInfo{ network{102} nc{[ Transports: VPN Capabilities: INTERNET&VALIDATED ]} }
+            mValidationLogs:
+              PROBE_DNS connectivitycheck.gstatic.com 9ms OK 142.251.150.120
+              PROBE_HTTP http://connectivitycheck.gstatic.com/generate_204 ret=204
+            """;
+
+        var parsed = AndroidDeviceInventoryCollector.ParseNetwork(
+            output,
+            new Dictionary<string, string?>
+            {
+                ["global.always_on_vpn_app"] = "com.nordvpn.android",
+                ["global.always_on_vpn_lockdown"] = "1",
+            });
+
+        await Assert.That(parsed.ActiveTransport).IsEqualTo("WIFI");
+        await Assert.That(parsed.ActiveNetworkIsVpn).IsFalse();
+        await Assert.That(parsed.VpnTransportObserved).IsTrue();
+        await Assert.That(parsed.DefaultNetworkValidated).IsTrue();
+        await Assert.That(parsed.AlwaysOnVpnPackage).IsEqualTo("com.nordvpn.android");
+        await Assert.That(parsed.AlwaysOnVpnLockdown).IsTrue();
+        await Assert.That(parsed.ObservedDestinations)
+            .Contains("connectivitycheck.gstatic.com");
+        await Assert.That(parsed.ObservedDestinations.ToString())
+            .DoesNotContain("142.251.150.120");
+    }
 }

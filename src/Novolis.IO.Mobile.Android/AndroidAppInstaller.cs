@@ -160,22 +160,6 @@ public sealed class AndroidAppInstaller
                     AndroidFailureKind.VerificationFailed);
             }
 
-            if (!string.IsNullOrWhiteSpace(options.ExpectedSigningCertificateSha256)
-                && !string.Equals(
-                    NormalizeDigest(package.SigningCertificateSha256),
-                    NormalizeDigest(options.ExpectedSigningCertificateSha256),
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return new ApkInstallResult(
-                    false,
-                    $"Installed package '{options.ExpectedPackageName}' has an unexpected signing certificate.",
-                    validation.ApkPath,
-                    device.Serial,
-                    package,
-                    validation,
-                    install,
-                    AndroidFailureKind.VerificationFailed);
-            }
         }
         else if (!string.IsNullOrWhiteSpace(options.ExpectedPackageName))
         {
@@ -188,9 +172,15 @@ public sealed class AndroidAppInstaller
 
         if (!string.IsNullOrWhiteSpace(options.ExpectedSigningCertificateSha256))
         {
-            if (package is null
-                || !string.Equals(
-                    NormalizeDigest(package.SigningCertificateSha256),
+            var installedDigest = package is null
+                ? null
+                : await ReadInstalledSigningCertificateAsync(
+                        package,
+                        device.Serial,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            if (!string.Equals(
+                    installedDigest,
                     NormalizeDigest(options.ExpectedSigningCertificateSha256),
                     StringComparison.OrdinalIgnoreCase))
             {
@@ -248,6 +238,50 @@ public sealed class AndroidAppInstaller
             : $"Installed {Path.GetFileName(validation.ApkPath)} on {device.Serial}.";
 
         return new ApkInstallResult(true, msg, validation.ApkPath, device.Serial, package, validation, install);
+    }
+
+    private async Task<string?> ReadInstalledSigningCertificateAsync(
+        AndroidPackageInfo package,
+        string serial,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(package.ApkPath))
+            return null;
+
+        var localPath = Path.Combine(
+            Path.GetTempPath(),
+            $"novolis-android-signing-{Guid.NewGuid():N}.apk");
+        try
+        {
+            var pull = await _adb.PullAsync(
+                    package.ApkPath,
+                    localPath,
+                    serial,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (!pull.Ok)
+                return null;
+
+            var inspection = await AndroidApkInspector.InspectAsync(
+                    localPath,
+                    cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            return inspection.Ok
+                ? NormalizeDigest(inspection.SigningCertificateSha256)
+                : null;
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(localPath))
+                    File.Delete(localPath);
+            }
+            catch
+            {
+                // Signature verification must not fail because cleanup was unavailable.
+            }
+        }
     }
 
     private async Task<AndroidPackageInfo?> WaitForPackageAsync(

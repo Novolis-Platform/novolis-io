@@ -18,6 +18,9 @@ public sealed record AndroidDeviceInventory
     /// <summary>Privacy-safe account summary.</summary>
     public AndroidAccountSnapshot Accounts { get; init; } = new();
 
+    /// <summary>Privacy-safe network and VPN summary.</summary>
+    public AndroidNetworkSnapshot Network { get; init; } = new();
+
     /// <summary>Selected provisioning and privacy settings.</summary>
     public AndroidSettingsSnapshot Settings { get; init; } = new();
 }

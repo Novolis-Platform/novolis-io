@@ -45,6 +45,22 @@ public sealed class AndroidDeviceInventoryCollector
         @"\bAuthenticatorDescription\s*\{type=(?<type>[^,}\s]+)",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    private static readonly Regex ActiveDefaultNetworkRegex = new(
+        @"(?m)^\s*Active default network:\s*(?<network>\d+)\s*$",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex NetworkIdRegex = new(
+        @"\bnetwork\{(?<network>\d+)\}",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex TransportRegex = new(
+        @"\bTransports:\s*(?<transports>.*?)\s+Capabilities:",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex ConnectivityDestinationRegex = new(
+        @"\b(?:PROBE_(?:DNS|HTTP|HTTPS)|DNS)\s+(?<host>[A-Za-z0-9.-]+\.[A-Za-z]{2,})",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     private static readonly (string Scope, string Name)[] SettingKeys =
     [
         ("global", "device_provisioned"),
@@ -56,6 +72,7 @@ public sealed class AndroidDeviceInventoryCollector
         ("global", "private_dns_specifier"),
         ("global", "http_proxy"),
         ("global", "always_on_vpn_app"),
+        ("global", "always_on_vpn_lockdown"),
         ("secure", "user_setup_complete"),
         ("secure", "backup_enabled"),
         ("secure", "install_non_market_apps"),
@@ -122,6 +139,13 @@ public sealed class AndroidDeviceInventoryCollector
                     warnings,
                     cancellationToken)
                 .ConfigureAwait(false);
+            var connectivityOutput = await ReadShellAsync(
+                    "dumpsys connectivity",
+                    "network and VPN inventory",
+                    serial,
+                    warnings,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             var settingValues = new Dictionary<string, string?>(StringComparer.Ordinal);
             foreach (var (scope, name) in SettingKeys)
@@ -146,6 +170,7 @@ public sealed class AndroidDeviceInventoryCollector
                     disabledPackageOutput),
                 LauncherActivities = ParseLauncherActivities(launcherOutput),
                 Accounts = ParseAccounts(accountOutput),
+                Network = ParseNetwork(connectivityOutput, settingValues),
                 Settings = ParseSettings(settingValues),
             };
 
@@ -327,6 +352,88 @@ public sealed class AndroidDeviceInventoryCollector
         };
     }
 
+    /// <summary>
+    /// Parses connectivity-service output without retaining addresses, SSIDs,
+    /// routes, or the raw dump.
+    /// </summary>
+    public static AndroidNetworkSnapshot ParseNetwork(
+        string? connectivityOutput,
+        IReadOnlyDictionary<string, string?> settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var text = connectivityOutput ?? string.Empty;
+        var defaultMatch = ActiveDefaultNetworkRegex.Match(text);
+        var defaultNetwork = defaultMatch.Success
+            ? defaultMatch.Groups["network"].Value
+            : null;
+
+        string? activeTransport = null;
+        var activeTransports = new List<string>();
+        var activeNetworkIsVpn = false;
+        var vpnTransportObserved = false;
+        var defaultNetworkValidated = false;
+
+        foreach (var line in SplitLines(text))
+        {
+            if (!line.Contains("NetworkAgentInfo", StringComparison.Ordinal))
+                continue;
+
+            var networkMatch = NetworkIdRegex.Match(line);
+            var transportMatch = TransportRegex.Match(line);
+            var transports = transportMatch.Success
+                ? SplitTransports(transportMatch.Groups["transports"].Value)
+                : [];
+            if (transports.Contains("VPN", StringComparer.OrdinalIgnoreCase))
+                vpnTransportObserved = true;
+
+            if (defaultNetwork is null
+                || !networkMatch.Success
+                || !string.Equals(
+                    networkMatch.Groups["network"].Value,
+                    defaultNetwork,
+                    StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            activeTransports.AddRange(transports);
+            activeTransport = transports.FirstOrDefault();
+            activeNetworkIsVpn = transports.Contains("VPN", StringComparer.OrdinalIgnoreCase)
+                || !line.Contains("NOT_VPN", StringComparison.OrdinalIgnoreCase);
+            defaultNetworkValidated = line.Contains(
+                "VALIDATED",
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        var alwaysOnPackage = TryGetSetting(
+            settings,
+            "global.always_on_vpn_app");
+        var lockdown = IsTrueSetting(TryGetSetting(
+            settings,
+            "global.always_on_vpn_lockdown"));
+        var destinations = ConnectivityDestinationRegex.Matches(text)
+            .Select(match => match.Groups["host"].Value.TrimEnd('.').ToLowerInvariant())
+            .Where(host => host.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(host => host, StringComparer.Ordinal)
+            .ToArray();
+
+        return new AndroidNetworkSnapshot
+        {
+            HasActiveDefaultNetwork = defaultNetwork is not null && activeTransport is not null,
+            ActiveTransport = activeTransport,
+            ActiveTransports = activeTransports
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            ActiveNetworkIsVpn = activeNetworkIsVpn,
+            VpnTransportObserved = vpnTransportObserved,
+            DefaultNetworkValidated = defaultNetworkValidated,
+            AlwaysOnVpnPackage = alwaysOnPackage,
+            AlwaysOnVpnLockdown = lockdown,
+            ObservedDestinations = destinations,
+        };
+    }
+
     private async Task<string?> ReadShellAsync(
         string command,
         string label,
@@ -398,4 +505,24 @@ public sealed class AndroidDeviceInventoryCollector
             ? null
             : normalized;
     }
+
+    private static string? TryGetSetting(
+        IReadOnlyDictionary<string, string?> settings,
+        string key) =>
+        settings.TryGetValue(key, out var value)
+            ? NormalizeSettingValue(value)
+            : null;
+
+    private static bool IsTrueSetting(string? value) =>
+        string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
+
+    private static IReadOnlyList<string> SplitTransports(string value) =>
+        value
+            .Split(
+                [' ', ',', '&'],
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(transport => transport.Length > 0)
+            .ToArray();
 }
